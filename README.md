@@ -10,7 +10,7 @@ graph TB
         direction TB
         S0["Stage 0: Org, IAM, Policies"]
         S1["Stage 1: Folders, SAs"]
-        S2["Stage 2: Hub VPC, NVAs, Spoke VPCs"]
+        S2["Stage 2: NCC Hub + Spoke VPCs"]
         S3["Stage 3: KMS, Alerts"]
         S0 --> S1 --> S2 --> S3
     end
@@ -18,7 +18,7 @@ graph TB
     subgraph L1["L1 — researcher-lab (this repo)"]
         direction TB
         PF["Project Factory<br/>YAML per researcher"]
-        PF --> PROJ["📦 Researcher Project<br/>24 APIs, SA, Shared VPC,<br/>billing, logging, monitoring"]
+        PF --> PROJ["📦 Researcher Project<br/>24 APIs, SA, VPC + Cloud NAT,<br/>billing, logging, monitoring"]
     end
 
     subgraph L2["L2 — workload repos"]
@@ -48,8 +48,8 @@ Fill in your values for researcher project provisioning. These feed into the pro
 | 4 | **Department name** (e.g. `pathology`, `genomics`) | `________` | Project YAML filename + labels |
 | 5 | **Researcher name** (e.g. `medsiglip`, `rnaseq`) | `________` | Project YAML filename + labels |
 | 6 | **Workload type** — `medsiglip-pathology`, `nextflow-batch`, or custom | `________` | Determines which APIs and IAM roles to include |
-| 7 | **Host project** (Prod spoke from L0 Stage 2) | `________` | `shared_vpc_service_config.host_project` in YAML |
-| 8 | **Subnet region/name** (from L0 Stage 2 subnets) | `________` | `service_agent_subnet_iam` key in YAML |
+| 7 | **Network project** (from L0 Stage 2 output, e.g. `net-prod-0`) | `________` | `shared_vpc_service_config.host_project` in YAML |
+| 8 | **Subnet region/name** (from L0 Stage 2, e.g. `us-central1/default`) | `________` | `service_agent_subnet_iam` key in YAML |
 | 9 | **Budget (monthly)** (optional) | `________` | Budget alert threshold |
 
 ---
@@ -71,8 +71,8 @@ graph TB
 
     CS --> P1["📦 PREFIX-prod-iac-core-0<br/><i>✅ Automation</i>"]
 
-    NET --> P4["📦 PREFIX-net-vdss-host<br/><i>✅ Hub VPC</i>"]
-    NET --> P5["📦 PREFIX-prod-net-host<br/><i>✅ Prod Spoke</i>"]
+    NET --> P4["📦 PREFIX-net-core-0<br/><i>✅ Hub VPC + NCC Hub</i>"]
+    NET --> P5["📦 PREFIX-net-prod-0<br/><i>✅ Prod Spoke VPC</i>"]
 
     SEC --> P9["📦 PREFIX-prod-sec-core-0<br/><i>✅ Prod KMS</i>"]
 
@@ -101,7 +101,7 @@ L1 uses Stellar Engine's [Project Factory](modules/project-factory/) to create r
 Each researcher project gets:
 - A GCP project with a meaningful name (e.g., `univ-pathology-modeltuning`)
 - Billing linked, logging + monitoring enabled
-- Shared VPC attachment to the L0 hub network
+- Connected to L0 network (internet via Cloud NAT — pip install, HuggingFace, etc. just work)
 - Service account for the researcher's pipeline
 - Budget alerts
 
@@ -206,17 +206,13 @@ services:
   - aiplatform.googleapis.com
   - notebooks.googleapis.com
 
-# Shared VPC: subnet-level IAM grants (least privilege)
-# The service agents and workload SA get compute.networkUser on SPECIFIC subnets
+# Connect to L0 network (the spoke VPC from Stage 2 provides Cloud NAT for internet)
 shared_vpc_service_config:
-  host_project: prod-spoke-0        # from L0 Stage 2
+  host_project: net-prod-0          # network project from L0 Stage 2
   service_agent_subnet_iam:
-    "us-central1/default-primary-region":   # region/subnet-name
+    "us-central1/prod-default":   # region/subnet-name
       - notebooks                           # Notebooks API agent
       - compute                             # Compute Engine agent
-  network_subnet_users:
-    "us-central1/default-primary-region":
-      - serviceAccount:dept-a-researcher-1-0@<prefix>-dept-a-researcher-1.iam.gserviceaccount.com
 
 service_accounts:
   dept-a-researcher-1-0:
@@ -240,7 +236,7 @@ This creates:
 📁 Prod
 └── 📦 <prefix>-dept-a-researcher-1         (researcher's project)
     ├── Billing linked
-    ├── Shared VPC attached to L0 hub
+    ├── Connected to L0 network (Cloud NAT for internet)
     ├── Logging + monitoring enabled
     ├── 11 APIs pre-enabled (compute, AI platform, batch, notebooks, ...)
     ├── Service account with log/metric write permissions
@@ -301,7 +297,7 @@ services:
   - notebooks.googleapis.com
 
 shared_vpc_service_config:
-  host_project: prod-spoke-0
+  host_project: net-prod-0
 
 service_accounts:
   dept-b-researcher-2-0:
