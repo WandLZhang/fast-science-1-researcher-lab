@@ -1,107 +1,337 @@
-## Introduction
+# Fast Science L1 — Researcher Labs
 
-Stellar Engine is a fork of the Google Cloud Foundation Fabric (CFF) repository, aimed at providing Infrastructure as Code (IaC) for Google Cloud Platform (GCP) customers who need to create a landing zone environment with the Assured Workload overlays. In addition to the IaC, there is documentation available for both the DISA FedRAMP High (FRH), DoD Impact Level 4 (IL4) and DoD Impact Level (IL5) compliance regimes that provide a mapping of National Institute of Standards and Technology (NIST) 800-53r5 controls to enable projects that leverage the Stellar Engine codebase to accelerate the speed at which an Authorization to Operate (ATO) can be attained.
+A fork of [Stellar Engine](https://github.com/gcp-stellar-engine/stellar-engine) that provisions researcher projects on top of an [L0 foundation](https://github.com/WandLZhang/fast-science-0-stellar-engine). This repo helps IT administration create department folders and base projects. The researcher can then deploy a workload from the L2 catalog.
 
-## Getting Started
+## Architecture
 
-This repository provides **end-to-end blueprints** and a **suite of Terraform modules** for Google Cloud, which support different use cases:
+```mermaid
+graph TB
+    subgraph L0["L0 — stellar-engine"]
+        direction TB
+        S0["Stage 0: Org, IAM, Policies"]
+        S1["Stage 1: Folders, SAs"]
+        S2["Stage 2: Hub VPC, NVAs, Spoke VPCs"]
+        S3["Stage 3: KMS, Alerts"]
+        S0 --> S1 --> S2 --> S3
+    end
 
-- Google Cloud Organization [landing zone blueprint](fast/) used to bootstrap real-world cloud foundations
-- reference [blueprints](./blueprints/) used to deep dive into network patterns or product features
-- a comprehensive source of lean [modules](./modules/) that lend themselves well to changes
+    subgraph L1["L1 — researcher-lab (this repo)"]
+        direction TB
+        PF["Project Factory<br/>YAML per researcher"]
+        PF --> PROJ["📦 Researcher Project<br/>24 APIs, SA, Shared VPC,<br/>billing, logging, monitoring"]
+    end
 
-## Target Audience and Benefits
+    subgraph L2["L2 — workload repos"]
+        direction LR
+        W1["Nextflow<br/>Batch pipelines"]
+        W2["MedSigLIP<br/>GPU fine-tuning"]
+        W3["Toxicology<br/>DILI prediction"]
+    end
 
-The target audience for Stellar Engine is organizations and teams that operate in regulated industries or require robust compliance and security frameworks. Below are a few examples of these such users:
+    S3 -->|"provides folders,<br/>networking, security"| L1
+    PROJ -->|"researcher gets<br/>project ID"| L2
 
-<mark>Government Agencies:</mark> Agencies and contractors, such as those that work with FRH, IL4, and IL5 environments.  <br />
-<mark>Regulated Industries:</mark> Regulated industries often face overlapping compliance and security requirements; Stellar Engine can simplify that.  <br />
-<mark>Educational and Research Institutions:</mark> Universities and research organizations working on government-funded projects that require secure and compliant cloud environments.  <br />
+    style L0 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style L1 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style L2 fill:#fff3e0,stroke:#e65100,stroke-width:2px
+```
 
-## Benefits of Stellar Engine
+## L1 Deployment Questionnaire
 
-Stellar Engine offers several significant benefits, particularly for organizations operating in regulated environments or requiring high levels of compliance and security. Here are the key advantages based on the summary:
+Fill in your values for researcher project provisioning. These feed into the project factory YAML and `terraform.tfvars`.
 
-<mark>Pre-Built Compliance Mappings:</mark> The inclusion of documentation mapping NIST 800-53r5 controls for FRH, IL4, and IL5 simplifies the process of achieving compliance. This allows organizations to fast-track their ATO processes by leveraging pre-validated configurations.  <br />
-<mark>IaC for Compliance:</mark> By embedding compliance requirements into IaC, Stellar Engine ensures that key controls are implemented consistently and automatically.   <br />
-<mark>Consistency and Scalability:</mark> Utilizing IaC enables repeatable and reliable deployment of landing zones, ensuring that infrastructure adheres to best practices and compliance standards.  <br />
-<mark>Flexibility:</mark> While tailored for Assured Workload overlays, Stellar Engine serves as a foundation for other compliance regimes, making it adaptable to various regulatory requirements.  <br />
-<mark>Efficiency:</mark> Automating infrastructure deployment reduces setup time and operational overhead, freeing up resources for other critical tasks and reducing manual effort and the risk of human error. <br />
-<mark>Assured Workload Overlays:</mark> By integrating with Google Cloud’s Assured Workloads, Stellar Engine provides a robust framework for secure and compliant cloud environments, particularly for sensitive workloads in government and defense sectors.  <br />
-<mark>Control Implementation:</mark> Many NIST controls are directly addressed via IaC, ensuring that security measures are embedded into the infrastructure from the start.  <br />
-<mark>Comprehensive Documentation:</mark> The availability of detailed guidance helps teams navigate the complexities of compliance and understand the implementation of controls.  <br />
+| # | Question | Your Value | Where It Goes |
+|---|----------|-----------|---------------|
+| 1 | **L0 Prefix** (same prefix used in L0 Stage 0) | `________` | Used to find outputs bucket: `<prefix>-prod-iac-core-outputs-0` |
+| 2 | **Domain** (same as L0) | `________` | `envs_folders.Prod.admin` group domain |
+| 3 | **Prod folder ID** (from L0 Stage 1 output) | `________` | `parent` in project YAML (optional — defaults to Prod folder) |
+| 4 | **Department name** (e.g. `pathology`, `genomics`) | `________` | Project YAML filename + labels |
+| 5 | **Researcher name** (e.g. `medsiglip`, `rnaseq`) | `________` | Project YAML filename + labels |
+| 6 | **Workload type** — `medsiglip-pathology`, `nextflow-batch`, or custom | `________` | Determines which APIs and IAM roles to include |
+| 7 | **Host project** (Prod spoke from L0 Stage 2) | `________` | `shared_vpc_service_config.host_project` in YAML |
+| 8 | **Subnet region/name** (from L0 Stage 2 subnets) | `________` | `service_agent_subnet_iam` key in YAML |
+| 9 | **Budget (monthly)** (optional) | `________` | Budget alert threshold |
 
-## Assured Workloads
+---
 
-Google Cloud Assured Workloads is a service designed to help organizations meet regulatory and compliance requirements when using cloud resources. It simplifies the process of creating and managing cloud environments that align with specific compliance frameworks, such as FedRAMP, HIPAA, CJIS, or GDPR. By leveraging GCP Assured Workloads, organizations can confidently deploy and manage workloads in the cloud while meeting strict compliance requirements, all without compromising on security or operational efficiency.
+## L1 Deployment Map
 
+By this point L0 is assumed fully deployed (all ✅). This diagram tracks L1 project factory progress.
 
-## FAST Stages - GCP Organization Blueprints
+```mermaid
+graph TB
+    ORG["🏢 GCP Organization"]
 
-Setting up a production-ready GCP Organization is often a time-consuming process. Stellar Engine's [FAST](fast/) stages aim to speed up this process via two complementary goals. On the one hand, FAST provides a design of a GCP Organization that includes the typical elements required by enterprise customers. Secondly, we provide a reference implementation of the FAST design using Terraform. For pricing and other information about Assured Workloads, please see Google's documentation [here](https://cloud.google.com/security/products/assured-workloads?hl=en).
+    ORG --> AW["📁 StellarEngine-PREFIX<br/><i>✅ Deployed — L0</i>"]
 
-## Modules
+    AW --> CS["📁 Common Services<br/><i>✅ Deployed — L0</i>"]
+    AW --> NET["📁 Networking<br/><i>✅ Deployed — L0</i>"]
+    AW --> SEC["📁 Security<br/><i>✅ Deployed — L0</i>"]
+    AW --> PROD["📁 Prod<br/><i>✅ Deployed — L0</i>"]
 
-The suite of modules in this repository is designed for rapid composition and reuse, and to be reasonably simple and readable so that they can be forked and changed where the use of third-party code and sources is not allowed. Modules that end with "se" have been modified from the original CFF versions to allow for use cases specific to Stellar Engine, while still allowing for upstream updates from CFF. Modifications to modules should continue to follow this paradigm.
+    CS --> P1["📦 PREFIX-prod-iac-core-0<br/><i>✅ Automation</i>"]
 
-All modules share a similar interface where each module tries to stay close to the underlying provider resources, support IAM together with resource creation and modification, offer the option of creating multiple resources where it makes sense (e.g. not for projects), and be completely free of side-effects (e.g. no external commands).
+    NET --> P4["📦 PREFIX-net-vdss-host<br/><i>✅ Hub VPC</i>"]
+    NET --> P5["📦 PREFIX-prod-net-host<br/><i>✅ Prod Spoke</i>"]
 
-A well-defined naming standard is used across Stellar Engine to ensure adherence to Google Cloud's best practices, naming requirements, and naming collision avoidance for global resources. The Google Cloud naming standard documentation is [here](documentation/naming-convention.md) and will be used before the Stellar Engine deployment begins by choosing a naming standard that will flow through the Google Cloud infrastructure state.
+    SEC --> P9["📦 PREFIX-prod-sec-core-0<br/><i>✅ Prod KMS</i>"]
 
-The current modules support most of the core foundational and networking components used to design end-to-end infrastructure, with more modules in active development for specialized compute, security, and data scenarios.
+    PROD --> PF["📁 Project Factory<br/><i>⏳ Planned — L1</i>"]
+    PF --> RP1["📦 PREFIX-dept-researcher<br/><i>⏳ First researcher project</i>"]
 
-For more information and usage examples see each module's README file, as well as any associated blueprints.
+    style ORG fill:#fff,stroke:#333,stroke-width:2px
+    style AW fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style CS fill:#e8f5e9,stroke:#2e7d32
+    style NET fill:#fff3e0,stroke:#e65100
+    style SEC fill:#fce4ec,stroke:#c62828
+    style PROD fill:#f3e5f5,stroke:#6a1b9a
+    style P1 fill:#e8f5e9,stroke:#2e7d32
+    style P4 fill:#fff3e0,stroke:#e65100
+    style P5 fill:#fff3e0,stroke:#e65100
+    style P9 fill:#fce4ec,stroke:#c62828
+    style PF stroke-dasharray: 5 5,stroke:#90a4ae,fill:#fafafa
+    style RP1 stroke-dasharray: 5 5,stroke:#90a4ae,fill:#fafafa
+```
 
-## End-to-End Blueprints
-
-Stellar Engine currently offers blueprints that are compliant with [FRH](https://github.com/google/stellar-engine/tree/main/blueprints/fedramp-high) and [IL5](https://github.com/google/stellar-engine/tree/main/blueprints/il5) baselines. </br>
-These blueprints range from full end-to-end services like a Cloud Native Access Point (CNAP), to ad-hoc services that are designed to be molded to users' individual use cases.
-
-For more information, please look at each blueprint's README file.
-
-## Cybersecurity Documentation
-
-In addition to the IaC, Stellar Engine provides supporting documentation that maps NIST 800-53r5 controls for users leveraging the IaC. This documentation is designed to streamline achieving ATO by providing generalized templates. All documentation is provided [here](https://drive.google.com/drive/folders/1NeWZcOuxysi7kUNRCFDd8CeHnxF14ywp). For how to utilize these documents, please see the following [Path to Authorization](docs/path-to-authorization.md) guide.
-
-## Detailed Deployment Guide
-
-The Stellar Engine Cloud Foundation Fabric Detailed Deployment Guide (DDG) outlines a structured process for deploying a secure, compliant infrastructure on GCP using IaC. Designed to support compliance with standards such as FRH, IL4, and IL5, the guide enables organizations to create a foundational "landing zone" with Assured Workload overlays. It includes mappings of NIST 800-53r5 controls to streamline achieving ATO. The deployment process is divided into stages, each focusing on specific components like resource management, networking, and security configuration.
-
-Key stages include Stage 0 (Bootstrap), which initializes the infrastructure, creates core Google Cloud Projects, and sets up service accounts; Stage 1 (Resource Management), which organizes Google Cloud Folders and Google Cloud Projects for tenants; and Stage 2 (Network Creation), which configures networking, including advanced setups like Palo Alto NGFWs for IL5 environments. The final stage, Stage 3 (Security and Audit Account Configuration), establishes security protocols, including Customer Managed Encryption Keys (CMEK) requirements and logging for audit purposes. Each stage requires detailed configuration of Terraform variables and adherence to prerequisites like IAM roles, service account setups, and enabling Google Cloud services.
-
-The guide emphasizes the importance of compliance, providing instructions for enabling Access Transparency and managing IAM roles effectively. Appendices include steps for creating new GCP Organizations and troubleshooting common issues like KMS key errors. Overall, the document serves as a comprehensive manual for deploying compliant, scalable, and secure cloud environments tailored to government and regulated industry requirements.
-
-For more information, please look at the [DDG](docs/ddg.md).
-
-## Technical Design Document
-
-The Stellar Engine Technical Design Document (TDD) outlines a comprehensive framework for deploying secure, compliant, and scalable GCP infrastructure, particularly tailored for Federal ATO processes. This document highlights a structured approach to building a cloud foundation using IaC principles.
-
-The document delves into key aspects such as Identity and Access Management (IAM), Google Cloud Organization configuration, Google Cloud Project hierarchy, networking, and security. It emphasizes principles like least privilege for IAM, structured role group management, and secure service account configurations. The networking section introduces a hub-and-spoke VPC architecture, leveraging shared VPCs and service controls to ensure isolation and secure interservice communications. Additionally, it provides guidelines for implementing encryption at rest and in transit, logging and monitoring strategies, and robust access control mechanisms to meet compliance needs. This document is a vital resource for teams aiming to adopt GCP with a focus on security, compliance, and scalability. The TDD is used in conjunction with the Security Best Practices Guide for hardening the deployment against real-world cyber threats and attacks.
-
-For more information, please look at the [TDD](docs/tdd.md).
-
-## Security Best Practices Guide
-
-The Stellar Engine Security Best Practices Guide (SBPG) outlines a robust framework for deploying secure and compliant GCP infrastructure. Designed for organizations requiring adherence to FRH and IL5 standards, it employs IaC principles via Terraform. The Stellar Engine facilitates the automated creation of a baseline GCP environment, supporting modular deployment of both Google and approved third-party services. Its hierarchical architecture ensures effective organization, leveraging role-based access control (RBAC), strict IAM policies, and a hub-and-spoke VPC networking design for isolation and scalability.
-
-The document emphasizes best practices in identity and access management, security monitoring, and compliance. IAM configurations focus on the principle of least privilege, with automation enabling minimal human interaction during setup. Security features include encryption-at-rest, TLS enforcement, and centralized logging and monitoring through audit logs, VPC flow logs, and other diagnostics. The system supports Assured Workloads, providing region-specific data residency and compliance settings to meet regulatory requirements.
-
-Accompanied by the SBPG, the document incorporates recommendations from penetration testing conducted by Mandiant, aimed at hardening the system against real-world cyber threats. The guide advocates for enforcing multi-factor authentication (MFA), segmenting security monitoring tools, and integrating Security Information Event Management (SIEM) solutions for proactive threat detection. Together, these resources enable secure, scalable, and compliant cloud operations for high-security use cases.
-
-For more information, please look at the [Security Best Practices Guide](https://docs.google.com/document/d/1uv62Fqg73r9oJNP-NPZebpzoBom8rOgLoHkiMZPutbo/edit?usp=sharing). NOTE: you will need to request permissions for it.
-
-## Contributing
-
-We welcome contributions to Stellar Engine! Since this is an open-source project, you can contribute by forking the repository, making your changes, and submitting a pull request. 
-
-Please ensure your code adheres to our formatting and security standards. 
-
-## Issue Reporting
-
-If you encounter any bugs, have feature requests, or run into deployment issues, please [create an issue](https://github.com/google/stellar-engine/issues) on our GitHub repository. Keep the issue description clear and provide steps to reproduce if applicable.
+---
 
 
-## Google’s Open Source Software Vulnerability Rewards Program (OSS VRP)
+L1 uses Stellar Engine's [Project Factory](modules/project-factory/) to create researcher projects from YAML files. Each YAML file = one project. The filename controls the project name.
 
-This is not an officially supported Google product. This project is not eligible for the [Google Open Source Software Vulnerability Rewards Program](https://bughunters.google.com/open-source-security).
+Each researcher project gets:
+- A GCP project with a meaningful name (e.g., `univ-pathology-modeltuning`)
+- Billing linked, logging + monitoring enabled
+- Shared VPC attachment to the L0 hub network
+- Service account for the researcher's pipeline
+- Budget alerts
+
+> **Note:** All steps below are run from this repo (L1). Since L0 and L1 are both forks of Stellar Engine with the same code, modules, and shared Terraform state (GCS), you can also follow these steps from the [L0 repo](https://github.com/WandLZhang/fast-science-0-stellar-engine) if you prefer.
+
+### Step 1 — Enable project factory (one-time prerequisite)
+
+```bash
+cd fast/stages-aw/1-resman
+
+# <prefix> is the prefix you chose during L0 Stage 0 setup (e.g., "wzuniv", "univ")
+# The outputs bucket follows the naming convention: <prefix>-prod-iac-core-outputs-0
+../../stage-links.sh gs://<prefix>-prod-iac-core-outputs-0
+# Copy and paste the output commands
+```
+
+Create `terraform.tfvars` with the following content:
+
+```hcl
+envs_folders = {
+  Prod = { admin = "group:gcp-organization-admins@yourdomain.com" }
+}
+
+fast_features = {
+  envs            = true
+  project_factory = true
+}
+```
+
+Apply. The `0-globals.auto.tfvars.json` overrides `terraform.tfvars` for `fast_features`, so pass via `-var`:
+
+```bash
+terraform init
+terraform apply -var='fast_features={envs=true, project_factory=true}'
+```
+
+### Step 2 — Set up the project factory stage
+
+```bash
+mkdir -p fast/stages-aw/3-project-factory-prod/data/projects
+cd fast/stages-aw/3-project-factory-prod
+
+# Download provider and tfvars from the outputs bucket
+# (stage-links.sh doesn't recognize this new directory, so download explicitly)
+gcloud alpha storage cp gs://<prefix>-prod-iac-core-outputs-0/providers/3-project-factory-prod-providers.tf ./
+gcloud alpha storage cp gs://<prefix>-prod-iac-core-outputs-0/tfvars/0-globals.auto.tfvars.json ./
+gcloud alpha storage cp gs://<prefix>-prod-iac-core-outputs-0/tfvars/0-bootstrap.auto.tfvars.json ./
+gcloud alpha storage cp gs://<prefix>-prod-iac-core-outputs-0/tfvars/1-resman.auto.tfvars.json ./
+```
+
+Copy and edit `main.tf`:
+
+```bash
+cp main.tf.sample main.tf
+# Edit main.tf — update lines marked # ← CHANGE with your L0 deployment values
+```
+
+### Step 3 — Create researcher project YAMLs
+
+Each researcher project gets a YAML file. The filename becomes the project name suffix:
+
+```bash
+cp data/projects/dept-researcher-project.yaml.sample data/projects/my-dept-my-project.yaml
+```
+
+Edit the new file with your values:
+
+```yaml
+# data/projects/my-dept-my-project.yaml
+# → creates project: <prefix>-my-dept-my-project
+
+labels:
+  department: my-dept
+  researcher: my-researcher
+  cost-center: "1234"
+
+services:
+  # Stellar Engine standard (from tenant project defaults)
+  - accesscontextmanager.googleapis.com
+  - bigquery.googleapis.com
+  - bigqueryreservation.googleapis.com
+  - bigquerystorage.googleapis.com
+  - billingbudgets.googleapis.com
+  - cloudbilling.googleapis.com
+  - cloudbuild.googleapis.com
+  - cloudkms.googleapis.com
+  - cloudresourcemanager.googleapis.com
+  - compute.googleapis.com
+  - container.googleapis.com
+  - essentialcontacts.googleapis.com
+  - iam.googleapis.com
+  - iamcredentials.googleapis.com
+  - orgpolicy.googleapis.com
+  - pubsub.googleapis.com
+  - servicenetworking.googleapis.com
+  - serviceusage.googleapis.com
+  - stackdriver.googleapis.com
+  - storage-component.googleapis.com
+  - storage.googleapis.com
+  - sts.googleapis.com
+  # Research workload APIs
+  - aiplatform.googleapis.com
+  - notebooks.googleapis.com
+
+# Shared VPC: subnet-level IAM grants (least privilege)
+# The service agents and workload SA get compute.networkUser on SPECIFIC subnets
+shared_vpc_service_config:
+  host_project: prod-spoke-0        # from L0 Stage 2
+  service_agent_subnet_iam:
+    "us-central1/default-primary-region":   # region/subnet-name
+      - notebooks                           # Notebooks API agent
+      - compute                             # Compute Engine agent
+  network_subnet_users:
+    "us-central1/default-primary-region":
+      - serviceAccount:dept-a-researcher-1-0@<prefix>-dept-a-researcher-1.iam.gserviceaccount.com
+
+service_accounts:
+  dept-a-researcher-1-0:
+    display_name: "Terraform-managed."
+    iam_self_roles:
+      - roles/logging.logWriter
+      - roles/monitoring.metricWriter
+```
+
+### Step 4 — Apply
+
+```bash
+terraform init
+terraform plan
+terraform apply
+```
+
+This creates:
+
+```
+📁 Prod
+└── 📦 <prefix>-dept-a-researcher-1         (researcher's project)
+    ├── Billing linked
+    ├── Shared VPC attached to L0 hub
+    ├── Logging + monitoring enabled
+    ├── 11 APIs pre-enabled (compute, AI platform, batch, notebooks, ...)
+    ├── Service account with log/metric write permissions
+    └── Labels: department, researcher, cost-center
+```
+
+> **📋 Update Deployment Map:** L1 project factory is complete. In the Deployment Map diagram above, change nodes **PF** and **RP1** from `⏳ Planned` to `✅ Deployed`. Change their styles from dashed gray to solid: PF/RP1 → `fill:#f3e5f5,stroke:#6a1b9a`. Replace `PREFIX-dept-researcher` with the actual project name.
+
+### Step 5 — Hand off to researcher
+
+Give the researcher:
+1. Their project ID (e.g., `<prefix>-dept-a-researcher-1`)
+2. A link to the appropriate L2 workload repo
+
+The researcher uses the L2 repo's README to deploy their workload
+
+```bash
+export GCP_PROJECT_ID="<prefix>-dept-a-researcher-1"
+# Researcher follows their L2 workload README
+```
+
+## Onboarding Another Researcher
+
+Add another YAML file:
+
+```yaml
+# data/projects/dept-b-researcher-2.yaml
+parent: folders/NNNNNNNNNNNN
+labels:
+  department: dept-b
+  researcher: researcher-2
+
+services:
+  # Same standard set — use data_merges in main.tf to avoid repeating
+  - accesscontextmanager.googleapis.com
+  - bigquery.googleapis.com
+  - bigqueryreservation.googleapis.com
+  - bigquerystorage.googleapis.com
+  - billingbudgets.googleapis.com
+  - cloudbilling.googleapis.com
+  - cloudbuild.googleapis.com
+  - cloudkms.googleapis.com
+  - cloudresourcemanager.googleapis.com
+  - compute.googleapis.com
+  - container.googleapis.com
+  - essentialcontacts.googleapis.com
+  - iam.googleapis.com
+  - iamcredentials.googleapis.com
+  - orgpolicy.googleapis.com
+  - pubsub.googleapis.com
+  - servicenetworking.googleapis.com
+  - serviceusage.googleapis.com
+  - stackdriver.googleapis.com
+  - storage-component.googleapis.com
+  - storage.googleapis.com
+  - sts.googleapis.com
+  - aiplatform.googleapis.com
+  - notebooks.googleapis.com
+
+shared_vpc_service_config:
+  host_project: prod-spoke-0
+
+service_accounts:
+  dept-b-researcher-2-0:
+    display_name: "Terraform-managed."
+```
+
+Re-apply. Done.
+
+## What You Touch vs What You Don't
+
+Same principle as L0 — minimize changes to Stellar Engine golden artifacts:
+
+| ✅ Edit | 🚫 Don't Edit |
+|---------|---------------|
+| `terraform.tfvars` — tenant definitions | `*.tf` — stage logic |
+| `data/*.yaml` — if using project factory | `modules/*` — Stellar Engine modules |
+
+## Upstream Sync
+
+This repo tracks [Stellar Engine](https://github.com/gcp-stellar-engine/stellar-engine) upstream:
+
+```bash
+git fetch upstream
+git merge upstream/main
+# Conflicts only in README.md (the only file we changed)
+```
+
+## Related Repos
+
+| Layer | Repo | Purpose |
+|-------|------|---------|
+| **L0** | [fast-science-0-stellar-engine](https://github.com/WandLZhang/fast-science-0-stellar-engine) | GCP org landing zone (Stages 0-3) |
+| **L1** | This repo | Researcher project provisioning via tenants |

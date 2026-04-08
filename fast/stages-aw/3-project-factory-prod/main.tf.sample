@@ -1,0 +1,42 @@
+/**
+ * Fast Science L1 — Project Factory
+ *
+ * Creates researcher projects from YAML files in data/projects/.
+ * Each YAML file = one GCP project with billing, APIs, SA, and Shared VPC.
+ *
+ * Copy this file: cp main.tf.sample main.tf
+ * Then edit the lines marked # ← CHANGE
+ */
+
+module "project-factory" {
+  source = "../../../modules/project-factory"
+
+  data_defaults = {
+    billing_account  = "012345-67890A-BCDEF0"    # ← CHANGE: your billing account ID
+    parent           = "folders/NNNNNNNNNNNN"     # ← CHANGE: Prod folder from L0 Stage 1
+    prefix           = "univ"                     # ← CHANGE: your prefix from L0 Stage 0
+    storage_location = "US"
+  }
+
+  data_merges = {
+    labels = {
+      managed-by = "fast-science-l1"
+    }
+    services = [
+      "logging.googleapis.com",
+      "monitoring.googleapis.com",
+    ]
+  }
+
+  factories_config = {
+    projects_data_path = "${path.module}/data/projects"
+    # Context maps allow project YAMLs to reference host projects by short name
+    # in shared_vpc_service_config.host_project. Required for L2 workloads to
+    # create VMs (workbench, batch) on the L0 shared subnet.
+    context = {
+      vpc_host_projects = {
+        "prod-spoke-0" = "univ-prod-net-host"    # ← CHANGE: your L0 Prod spoke host project ID
+      }
+    }
+  }
+}

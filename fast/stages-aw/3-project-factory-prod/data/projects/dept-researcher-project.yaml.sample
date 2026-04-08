@@ -1,0 +1,61 @@
+# Sample researcher project YAML
+# Copy and rename: cp dept-researcher-project.yaml.sample my-dept-my-project.yaml
+# The filename (without .yaml) becomes the project name suffix:
+#   my-dept-my-project.yaml → creates project: <prefix>-my-dept-my-project
+
+labels:
+  department: my-dept          # ← CHANGE
+  researcher: my-researcher    # ← CHANGE
+  cost-center: "1234"          # ← CHANGE
+
+# Attach to L0 Prod spoke Shared VPC
+# This grants compute.networkUser to the service agents listed below,
+# so L2 workloads (Workbench, Batch, GKE) can create VMs on shared subnets.
+# Without this, any VM creation on shared subnets fails with:
+#   "Required 'compute.subnetworks.use' permission"
+shared_vpc_service_config:
+  host_project: wzuniv-prod-net-host   # ← CHANGE: your L0 host project
+  service_agent_iam:
+    "roles/compute.networkUser":
+      - notebooks    # Vertex AI Workbench (if using GPU workbench)
+      - compute      # Compute Engine VMs (always needed)
+      # - container  # Uncomment if using GKE
+      # - batch      # Uncomment if using Cloud Batch
+  # Your workload SA also needs subnet access (used as VM service account)
+  network_users:
+    - my-dept-my-researcher-0  # ← CHANGE: match your SA name below
+
+services:
+  # Stellar Engine standard
+  - accesscontextmanager.googleapis.com
+  - bigquery.googleapis.com
+  - bigqueryreservation.googleapis.com
+  - bigquerystorage.googleapis.com
+  - billingbudgets.googleapis.com
+  - cloudbilling.googleapis.com
+  - cloudbuild.googleapis.com
+  - cloudkms.googleapis.com
+  - cloudresourcemanager.googleapis.com
+  - compute.googleapis.com
+  - container.googleapis.com
+  - essentialcontacts.googleapis.com
+  - iam.googleapis.com
+  - iamcredentials.googleapis.com
+  - orgpolicy.googleapis.com
+  - pubsub.googleapis.com
+  - servicenetworking.googleapis.com
+  - serviceusage.googleapis.com
+  - stackdriver.googleapis.com
+  - storage-component.googleapis.com
+  - storage.googleapis.com
+  - sts.googleapis.com
+  # Research workload APIs
+  - aiplatform.googleapis.com
+  - notebooks.googleapis.com
+
+service_accounts:
+  my-dept-my-researcher-0:     # ← CHANGE: match your project name
+    display_name: "Terraform-managed."
+    iam_self_roles:
+      - roles/logging.logWriter
+      - roles/monitoring.metricWriter
