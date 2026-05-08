@@ -21,50 +21,54 @@ locals {
   discovery_engine_industry_vertical = "GENERIC"
   discovery_engine_solution_types    = ["SOLUTION_TYPE_SEARCH"]
   discovery_engine_content_config    = "CONTENT_REQUIRED"
-  
+
   # Document Processing (digital_parsing_config or ocr_parsing_config)
-  discovery_engine_parsing_mode      = "digital_parsing_config"
+  discovery_engine_parsing_mode = "digital_parsing_config"
 }
 
 # ---------------------------------------------------------------------------- #
-#  Discovery Engine CMEK Config                                              #
+#  Gemini Enterprise - Identity Config                                         #
 # ---------------------------------------------------------------------------- #
 
-# CMEK Configuration for Discovery Engine (Conditional)
-resource "google_discovery_engine_cmek_config" "default" {
-  count = var.create_data_stores ? 1 : 0
-
-  project        = var.main_project_id
-  location       = var.geolocation # should be "US"
-  cmek_config_id = "default_cmek_config"
-  kms_key        = local.cmek_key_id
-  set_default    = true
-  provider       = google-beta
+# Discovery Engine ACL Config (Google Identity / Workforce Identity Federation)
+resource "google_discovery_engine_acl_config" "gemini_enterprise_acl_config" {
+  project  = var.main_project_id
+  location = var.geolocation # Must match the connector location
+  idp_config {
+    idp_type = var.acl_idp_type == "GOOGLE_CLOUD_IDENTITY" ? "GSUITE" : var.acl_idp_type
+    dynamic "external_idp_config" {
+      for_each = var.acl_idp_type == "THIRD_PARTY" ? [1] : []
+      content {
+        workforce_pool_name = var.acl_workforce_pool_name
+      }
+    }
+  }
+  provider = google-beta
 
   depends_on = [
-    google_kms_crypto_key_iam_member.discoveryengine_sa_kms_access,
-    google_kms_crypto_key_iam_member.gcs_sa_kms_access,
-    google_project_service.services,
-    time_sleep.wait_for_services,
+    time_sleep.wait_for_services
   ]
 }
 
 # ---------------------------------------------------------------------------- #
-#  Google Cloud Storage Data Stores                                            #
+#  Gemini Enterprise - Google Cloud Storage Data Stores                        #
 # ---------------------------------------------------------------------------- #
 
 # GCS Buckets for Discovery Engine Data Sources
 resource "google_storage_bucket" "gemini_enterprise_gcs_bucket" {
-  for_each = var.create_data_stores ? toset(var.gcs_data_store_names) : []
+  for_each = var.create_data_stores ? { for k, v in var.gcs_data_store_configs : k => v if v.create_bucket } : {}
 
   project                     = var.main_project_id
-  name                        = "${var.main_project_id}-${each.key}-data"
+  name                        = each.value.name
   location                    = var.geolocation
   uniform_bucket_level_access = true
-  force_destroy               = false # Set to true only for non-production
+  force_destroy               = true # Set to true only for non-production/demo
 
-  encryption {
-    default_kms_key_name = local.cmek_key_id
+  dynamic "encryption" {
+    for_each = local.cmek_key_id != null ? [1] : []
+    content {
+      default_kms_key_name = local.cmek_key_id
+    }
   }
 
   lifecycle_rule {
@@ -78,7 +82,7 @@ resource "google_storage_bucket" "gemini_enterprise_gcs_bucket" {
 
   labels = {
     environment = var.environment
-    service     = "${var.prefix}-gcs"
+    service     = "g4g-gcs-data-store"
     data_store  = each.key
   }
 
@@ -89,7 +93,7 @@ resource "google_storage_bucket" "gemini_enterprise_gcs_bucket" {
 
 # Random suffix for GCS Data Store IDs
 resource "random_string" "gcs_suffix" {
-  for_each = var.create_data_stores ? toset(var.gcs_data_store_names) : []
+  for_each = var.create_data_stores ? var.gcs_data_store_configs : {}
 
   length  = 6
   special = false
@@ -103,18 +107,18 @@ resource "random_string" "gcs_suffix" {
   }
 }
 
-# Discovery Engine Data Stores for GCS
+# Empty GCS Data Store
 resource "google_discovery_engine_data_store" "gemini_enterprise_gcs_data_store" {
-  for_each = var.create_data_stores ? toset(var.gcs_data_store_names) : []
+  for_each = var.create_data_stores ? var.gcs_data_store_configs : {}
 
   project           = var.main_project_id
   location          = var.geolocation # Must match the Data Store and Engine location
-  data_store_id     = "${each.key}-gcs-data-store-${random_string.gcs_suffix[each.key].result}"
-  display_name      = each.key
+  data_store_id     = "g4g-gcs-data-store-${random_string.gcs_suffix[each.key].result}"
+  display_name      = each.value.display_name != null ? each.value.display_name : each.key
   industry_vertical = local.discovery_engine_industry_vertical
   content_config    = local.discovery_engine_content_config
   solution_types    = local.discovery_engine_solution_types
-  kms_key_name      = local.cmek_key_id
+  kms_key_name      = var.enable_data_store_cmek ? local.cmek_key_id : null
   provider          = google-beta
 
   document_processing_config {
@@ -127,7 +131,6 @@ resource "google_discovery_engine_data_store" "gemini_enterprise_gcs_data_store"
   }
 
   depends_on = [
-    google_discovery_engine_cmek_config.default,
     google_kms_crypto_key_iam_member.discoveryengine_sa_kms_access,
     google_kms_crypto_key_iam_member.gcs_sa_kms_access,
     google_project_service.services,
@@ -136,24 +139,24 @@ resource "google_discovery_engine_data_store" "gemini_enterprise_gcs_data_store"
 }
 
 # ---------------------------------------------------------------------------- #
-#  BigQuery Data Stores                                                        #
+#  Gemini Enterprise - BigQuery Data Stores                                    #
 # ---------------------------------------------------------------------------- #
 
-locals {
-  bq_configs = { for idx, config in var.bq_data_store_configs : idx => config }
-}
-
+# BQ Dataset for Discovery Engine Data Sources
 resource "google_bigquery_dataset" "gemini_enterprise_bq_dataset" {
-  for_each = var.create_data_stores ? local.bq_configs : {}
+  for_each = var.create_data_stores ? { for k, v in var.bq_data_store_configs : k => v if v.create_dataset } : {}
 
   project       = var.main_project_id
   dataset_id    = each.value.dataset_id
-  friendly_name = "Gemini Enterprise Data - ${each.value.dataset_id}"
-  description   = "Dataset for Discovery Engine connector - ${each.value.dataset_id}"
+  friendly_name = "Gemini Enterprise Data Store - ${each.value.display_name}"
+  description   = "Dataset for Gemini Enterprise Data Store - ${each.value.display_name}"
   location      = var.geolocation # Or a more specific region specific location if desired
 
-  default_encryption_configuration {
-    kms_key_name = local.cmek_key_id
+  dynamic "default_encryption_configuration" {
+    for_each = local.cmek_key_id != null ? [1] : []
+    content {
+      kms_key_name = local.cmek_key_id
+    }
   }
 
   depends_on = [
@@ -163,51 +166,9 @@ resource "google_bigquery_dataset" "gemini_enterprise_bq_dataset" {
   ]
 }
 
-resource "google_bigquery_table" "gemini_enterprise_bq_table" {
-  for_each = var.create_data_stores ? local.bq_configs : {}
-
-  project             = var.main_project_id
-  dataset_id          = google_bigquery_dataset.gemini_enterprise_bq_dataset[each.key].dataset_id
-  table_id            = each.value.table_id
-  deletion_protection = false
-
-  encryption_configuration {
-    kms_key_name = local.cmek_key_id
-  }
-
-  # Define a default schema, users can adapt this as needed
-  schema = <<EOF
-[
-  {
-    "name": "id",
-    "type": "STRING",
-    "mode": "REQUIRED",
-    "description": "The ID of the document"
-  },
-  {
-    "name": "jsonData",
-    "type": "JSON",
-    "mode": "NULLABLE",
-    "description": "The JSON content of the document"
-  },
-  {
-    "name": "content",
-    "type": "STRING",
-    "mode": "NULLABLE",
-    "description": "The text content of the document"
-  }
-]
-EOF
-
-  depends_on = [
-    google_bigquery_dataset.gemini_enterprise_bq_dataset,
-    google_kms_crypto_key_iam_member.bq_sa_kms_access
-  ]
-}
-
 # Random suffix for BQ Data Store IDs
 resource "random_string" "bq_suffix" {
-  for_each = var.create_data_stores ? local.bq_configs : {}
+  for_each = var.create_data_stores ? var.bq_data_store_configs : {}
 
   length  = 6
   special = false
@@ -221,22 +182,19 @@ resource "random_string" "bq_suffix" {
   }
 }
 
-# ---------------------------------------------------------------------------- #
-#  Dynamic Discovery Engine with BigQuery Connectors                           #
-# ---------------------------------------------------------------------------- #
+# Empty BQ Data Store
 resource "google_discovery_engine_data_store" "gemini_enterprise_bq_data_store" {
-  for_each = var.create_data_stores ? local.bq_configs : {}
+  for_each = var.create_data_stores ? var.bq_data_store_configs : {}
 
-  project                      = var.main_project_id
-  location                     = var.geolocation # Must match the Data Store and Engine location
-  data_store_id                = "${replace(each.value.dataset_id, "_", "-")}-bq-data-store-${random_string.bq_suffix[each.key].result}"
-  display_name                 = "${each.value.dataset_id} - ${each.value.table_id}"
-  industry_vertical            = local.discovery_engine_industry_vertical
-  content_config               = local.discovery_engine_content_config
-  solution_types               = local.discovery_engine_solution_types
-  kms_key_name                 = local.cmek_key_id
-  skip_default_schema_creation = true
-  provider                     = google-beta
+  project           = var.main_project_id
+  location          = var.geolocation # Must match the Data Store and Engine location
+  data_store_id     = "g4g-bq-data-store-${random_string.bq_suffix[each.key].result}"
+  display_name      = each.value.display_name != null ? each.value.display_name : each.key
+  industry_vertical = local.discovery_engine_industry_vertical
+  content_config    = "NO_CONTENT"
+  solution_types    = local.discovery_engine_solution_types
+  kms_key_name      = var.enable_data_store_cmek ? local.cmek_key_id : null
+  provider          = google-beta
 
   document_processing_config {
     default_parsing_config {
@@ -248,7 +206,6 @@ resource "google_discovery_engine_data_store" "gemini_enterprise_bq_data_store" 
   }
 
   depends_on = [
-    google_discovery_engine_cmek_config.default,
     google_kms_crypto_key_iam_member.discoveryengine_sa_kms_access,
     google_kms_crypto_key_iam_member.gcs_sa_kms_access,
     google_kms_crypto_key_iam_member.bq_sa_kms_access,
@@ -259,31 +216,7 @@ resource "google_discovery_engine_data_store" "gemini_enterprise_bq_data_store" 
 
 # Add a delay to allow the DataStore to be created by the connector
 resource "time_sleep" "wait_for_bq_datastore" {
-  for_each        = var.create_data_stores ? local.bq_configs : {}
+  for_each        = var.create_data_stores ? var.bq_data_store_configs : {}
   create_duration = "30s"
   depends_on      = [google_discovery_engine_data_store.gemini_enterprise_bq_data_store]
-}
-
-# ---------------------------------------------------------------------------- #
-#  Common ACL Config                                                           #
-# ---------------------------------------------------------------------------- #
-
-# Discovery Engine ACL Config First-party
-resource "google_discovery_engine_acl_config" "gemini_enterprise_acl_config" {
-  project  = var.main_project_id
-  location = var.geolocation # Must match the connector location
-  idp_config {
-    idp_type = var.acl_idp_type
-    dynamic "external_idp_config" {
-      for_each = var.acl_idp_type == "THIRD_PARTY" ? [1] : []
-      content {
-        workforce_pool_name = var.acl_workforce_pool_name
-      }
-    }
-  }
-  provider = google-beta
-
-  depends_on = [
-    time_sleep.wait_for_services
-  ]
 }
