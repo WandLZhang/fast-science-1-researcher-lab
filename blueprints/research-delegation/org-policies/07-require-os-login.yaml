@@ -1,0 +1,7 @@
+# Require OS Login for SSH access to Compute Engine VMs. Maps SSH sessions to
+# Google identities so audit logs show who connected. Blocks legacy metadata-
+# based SSH keys, which is what shoulder-surfed credentials use.
+name: folders/${TEAMS_FOLDER_ID}/policies/compute.requireOsLogin
+spec:
+  rules:
+  - enforce: true

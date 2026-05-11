@@ -1,0 +1,155 @@
+# blueprints/research-delegation/project-templates/hardened-project.yaml.sample
+#
+# Hardened production project — for actual research work that handles real
+# data, runs real workloads, and lasts beyond a quick experiment.
+#
+# Defaults are strict: no public IPs (request exception per-VM), OS Login
+# required, no SA keys, allowlisted services only, attached to the L0 Shared
+# VPC for centralized network policy. A deletion lien is attached automatically
+# (the auto-lien CF would also catch this, but setting lien_reason here makes
+# the lien show up immediately at apply time, not after the next CF firing).
+#
+# To create a hardened project:
+#   1. Copy this file into the L1 PF data dir:
+#        cp blueprints/research-delegation/project-templates/hardened-project.yaml.sample \
+#           fast/stages-aw/3-project-factory-prod/data/projects/<dept>-<pi>-<workload>.yaml
+#   2. Replace every <PLACEHOLDER>.
+#   3. Apply:
+#        cd fast/stages-aw/3-project-factory-prod
+#        terraform plan
+#        terraform apply
+#
+# The filename (without .yaml) becomes the project name suffix:
+#   <dept>-<pi>-<workload>.yaml → creates project: <prefix>-<dept>-<pi>-<workload>
+
+# Production projects live under the PI's subfolder.
+parent: folders/<PI_FOLDER_ID>
+
+billing_account: <BILLING_ACCOUNT_ID>
+
+labels:
+  template: hardened
+  environment: production
+  department: <DEPT_KEY>
+  pi: <PI_USERNAME>
+  workload: <WORKLOAD_NAME>
+  cost-center: "<COST_CENTER>"
+  data-classification: "<public|internal|restricted>"
+
+# Allowlisted service set — matches the gcp.restrictServiceUsage policy at the
+# Teams folder level so nothing is blocked. To enable a new service, raise it
+# with IT (they extend the org policy at folder scope).
+services:
+  - accesscontextmanager.googleapis.com
+  - aiplatform.googleapis.com
+  - batch.googleapis.com
+  - bigquery.googleapis.com
+  - bigqueryreservation.googleapis.com
+  - bigquerystorage.googleapis.com
+  - billingbudgets.googleapis.com
+  - cloudbilling.googleapis.com
+  - cloudbuild.googleapis.com
+  - cloudkms.googleapis.com
+  - cloudresourcemanager.googleapis.com
+  - compute.googleapis.com
+  - container.googleapis.com
+  - eventarc.googleapis.com
+  - essentialcontacts.googleapis.com
+  - iam.googleapis.com
+  - iamcredentials.googleapis.com
+  - logging.googleapis.com
+  - monitoring.googleapis.com
+  - notebooks.googleapis.com
+  - orgpolicy.googleapis.com
+  - pubsub.googleapis.com
+  - servicenetworking.googleapis.com
+  - serviceusage.googleapis.com
+  - stackdriver.googleapis.com
+  - storage.googleapis.com
+  - storage-component.googleapis.com
+  - sts.googleapis.com
+  - workflows.googleapis.com
+
+# Attach to the L0 Prod spoke Shared VPC. This grants compute.networkUser
+# to the listed service agents so L2 workloads (Workbench, Batch, GKE) can
+# create VMs on the centrally managed subnets.
+shared_vpc_service_config:
+  host_project: <PREFIX>-prod-net-host
+  service_agent_iam:
+    "roles/compute.networkUser":
+      - notebooks
+      - compute
+      # - container   # uncomment if using GKE
+      # - batch       # uncomment if using Cloud Batch
+  network_users:
+    - <DEPT_KEY>-<PI_USERNAME>-<WORKLOAD_NAME>-0
+
+# Per-project org-policy overrides that REINFORCE the baseline — these are
+# already inherited from the Teams folder, but pinning them at the project
+# level prevents a careless future override at the folder/PI level from
+# weakening this specific project's posture.
+org_policies:
+
+  compute.vmExternalIpAccess:
+    rules:
+      - deny:
+          all: true
+
+  compute.requireOsLogin:
+    rules:
+      - enforce: true
+
+  compute.skipDefaultNetworkCreation:
+    rules:
+      - enforce: true
+
+  compute.disableSerialPortAccess:
+    rules:
+      - enforce: true
+
+  iam.disableServiceAccountKeyCreation:
+    rules:
+      - enforce: true
+
+# Lien blocks accidental project deletion. Lien removal requires
+# roles/resourcemanager.lienModifier, held by the team SA, IT, and the
+# auto-lien CF service account.
+lien_reason: "Production research project — contact IT to request lien removal before delete."
+
+# Budget cap with alerts. Adjust amount based on PI grant size; sample is
+# $5000/month. Define matching budget in
+# fast/stages-aw/3-project-factory-prod/data/budgets/.
+billing_budgets:
+  - hardened-default
+
+# Essential contacts — PI plus a department admin so notifications survive
+# PI departure / sabbatical.
+contacts:
+  pi-name@<UNIVERSITY_DOMAIN>:
+    - BILLING
+    - TECHNICAL
+    - LEGAL
+    - SECURITY
+  <DEPT_KEY>-admin@<UNIVERSITY_DOMAIN>:
+    - BILLING
+    - LEGAL
+
+# Workload service account. PI can self-grant additional workload-specific
+# roles via their folderAdmin permissions on the parent folder.
+service_accounts:
+  <DEPT_KEY>-<PI_USERNAME>-<WORKLOAD_NAME>-0:
+    display_name: "Production workload SA — managed by Terraform."
+    iam_self_roles:
+      - roles/logging.logWriter
+      - roles/monitoring.metricWriter
+
+# NOTE: a corresponding billing-budgets YAML must exist at
+#   fast/stages-aw/3-project-factory-prod/data/budgets/hardened-default.yaml
+# with content like:
+#   amount:
+#     units: 5000
+#   threshold_rules:
+#     - threshold_percent: 0.5
+#     - threshold_percent: 0.9
+#     - threshold_percent: 1.0
+#     - threshold_percent: 1.2

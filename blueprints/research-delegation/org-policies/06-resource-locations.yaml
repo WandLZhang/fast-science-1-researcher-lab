@@ -1,0 +1,16 @@
+# Restrict where data and resources can be created. Default below pins to US
+# locations (in:us-locations is a value group covering all US regions/multi-
+# regions, including dual-regions like nam4 and us).
+#
+# Adjust to your data-residency needs:
+#   in:us-locations          all US regions / multi-regions
+#   in:eu-locations          all EU regions / multi-regions
+#   us-central1              single region
+#   in:americas-locations    all of the Americas
+#   See: https://cloud.google.com/resource-manager/docs/organization-policy/defining-locations#location_groups
+name: folders/${TEAMS_FOLDER_ID}/policies/gcp.resourceLocations
+spec:
+  rules:
+  - values:
+      allowedValues:
+      - in:us-locations

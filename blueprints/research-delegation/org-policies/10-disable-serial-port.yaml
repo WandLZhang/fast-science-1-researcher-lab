@@ -1,0 +1,6 @@
+# Disable interactive serial port access on VMs. Serial-port logins bypass
+# OS Login and IAP and create an audit-log gap.
+name: folders/${TEAMS_FOLDER_ID}/policies/compute.disableSerialPortAccess
+spec:
+  rules:
+  - enforce: true

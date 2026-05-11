@@ -1,0 +1,6 @@
+# Disable upload of externally-generated public keys to service accounts.
+# Pairs with disableServiceAccountKeyCreation to close the BYO-key loophole.
+name: folders/${TEAMS_FOLDER_ID}/policies/iam.managed.disableServiceAccountKeyUpload
+spec:
+  rules:
+  - enforce: true

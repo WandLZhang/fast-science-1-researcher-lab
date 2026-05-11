@@ -1,0 +1,12 @@
+# Domain-restricted sharing: only principals from your Workspace / Cloud Identity
+# customer can be granted IAM roles on resources in this folder subtree.
+# Blocks accidental sharing to gmail.com, contractors at other domains, etc.
+#
+# Replace ${CUSTOMER_ID} with your Workspace customer ID. Find it with:
+#   gcloud organizations list --format='value(directoryCustomerId)'
+name: folders/${TEAMS_FOLDER_ID}/policies/iam.managed.allowedPolicyMembers
+spec:
+  rules:
+  - values:
+      allowedValues:
+      - principalSet://goog/cloudIdentityCustomerId/${CUSTOMER_ID}

@@ -1,0 +1,11 @@
+# Deny public IPs on Compute Engine VMs by default. PIs who legitimately need a
+# public-facing VM (rare for research) request an exception by adding their
+# project ID to the deniedValues exception list, applied at the project scope.
+#
+# This is a list constraint where deniedValues=ALL means every VM is denied a
+# public IP. Override at the project level by setting an empty deniedValues
+# (or by using `inheritFromParent: false` plus a permissive override).
+name: folders/${TEAMS_FOLDER_ID}/policies/compute.vmExternalIpAccess
+spec:
+  rules:
+  - denyAll: true

@@ -1,0 +1,8 @@
+# Disable creation of long-lived service account keys.
+# Forces all workloads to use short-lived credentials (Workload Identity, ADC).
+# Already on by default for orgs created after 2024-05-03; apply explicitly here
+# so it cascades to every team folder and survives org-level policy changes.
+name: folders/${TEAMS_FOLDER_ID}/policies/iam.managed.disableServiceAccountKeyCreation
+spec:
+  rules:
+  - enforce: true

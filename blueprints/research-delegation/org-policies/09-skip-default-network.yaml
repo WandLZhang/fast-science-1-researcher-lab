@@ -1,0 +1,7 @@
+# Skip creation of the legacy "default" VPC network when a new project is
+# created. New projects start with no VPC and must attach to the L0 Shared
+# VPC (or explicitly create one with hardened firewall rules).
+name: folders/${TEAMS_FOLDER_ID}/policies/compute.skipDefaultNetworkCreation
+spec:
+  rules:
+  - enforce: true

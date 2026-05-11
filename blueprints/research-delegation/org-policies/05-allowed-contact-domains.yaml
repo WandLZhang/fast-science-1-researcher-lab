@@ -1,0 +1,12 @@
+# Restrict Essential Contacts (where Google sends incident / billing /
+# legal notifications) to your institution's domains only. Prevents PIs from
+# adding personal addresses where sensitive notifications could leak.
+#
+# Replace ${UNIVERSITY_DOMAIN} with the domain. Add more allowedValues lines
+# for any subdomains your institution uses (e.g. alumni.<domain>).
+name: folders/${TEAMS_FOLDER_ID}/policies/essentialcontacts.managed.allowedContactDomains
+spec:
+  rules:
+  - values:
+      allowedValues:
+      - "@${UNIVERSITY_DOMAIN}"

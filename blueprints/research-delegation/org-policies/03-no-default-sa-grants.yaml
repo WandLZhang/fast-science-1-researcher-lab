@@ -1,0 +1,8 @@
+# Disable the legacy automatic Editor grant on default Compute Engine and
+# App Engine service accounts at project creation. PIs must explicitly grant
+# roles to the workload SA the L1 PF creates, instead of relying on the
+# implicit Editor.
+name: folders/${TEAMS_FOLDER_ID}/policies/iam.automaticIamGrantsForDefaultServiceAccounts
+spec:
+  rules:
+  - enforce: true

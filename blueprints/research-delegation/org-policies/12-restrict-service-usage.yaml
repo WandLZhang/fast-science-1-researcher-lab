@@ -1,0 +1,42 @@
+# Allowlist of Google Cloud APIs that PIs can enable in their projects.
+# Bounds blast radius — a compromised PI account cannot turn on, say, the
+# Anthos / GDC / Carbon Footprint / Healthcare APIs and run up surprise bills
+# or violate data-handling policy.
+#
+# Below is the standard set used by L1's project factory YAML (24 APIs covering
+# compute, BigQuery, Vertex AI, Batch, notebooks, KMS, Pub/Sub, etc.). Add or
+# remove services for your institution's research portfolio.
+name: folders/${TEAMS_FOLDER_ID}/policies/gcp.restrictServiceUsage
+spec:
+  rules:
+  - values:
+      allowedValues:
+      - accesscontextmanager.googleapis.com
+      - aiplatform.googleapis.com
+      - batch.googleapis.com
+      - bigquery.googleapis.com
+      - bigqueryreservation.googleapis.com
+      - bigquerystorage.googleapis.com
+      - billingbudgets.googleapis.com
+      - cloudbilling.googleapis.com
+      - cloudbuild.googleapis.com
+      - cloudkms.googleapis.com
+      - cloudresourcemanager.googleapis.com
+      - compute.googleapis.com
+      - container.googleapis.com
+      - eventarc.googleapis.com
+      - essentialcontacts.googleapis.com
+      - iam.googleapis.com
+      - iamcredentials.googleapis.com
+      - logging.googleapis.com
+      - monitoring.googleapis.com
+      - notebooks.googleapis.com
+      - orgpolicy.googleapis.com
+      - pubsub.googleapis.com
+      - servicenetworking.googleapis.com
+      - serviceusage.googleapis.com
+      - stackdriver.googleapis.com
+      - storage.googleapis.com
+      - storage-component.googleapis.com
+      - sts.googleapis.com
+      - workflows.googleapis.com

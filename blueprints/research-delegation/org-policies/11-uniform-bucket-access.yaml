@@ -1,0 +1,7 @@
+# Require uniform bucket-level access on every Cloud Storage bucket created in
+# this folder subtree. Disables per-object ACLs (the legacy fine-grained model)
+# and forces all access decisions through IAM, which is simpler to audit.
+name: folders/${TEAMS_FOLDER_ID}/policies/storage.uniformBucketLevelAccess
+spec:
+  rules:
+  - enforce: true
