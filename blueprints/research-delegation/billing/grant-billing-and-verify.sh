@@ -166,6 +166,7 @@ expected_policies=(
   compute.disableSerialPortAccess
   storage.uniformBucketLevelAccess
   gcp.restrictServiceUsage
+  vertexai.allowedPartnerModelFeatures
 )
 applied="$(gcloud org-policies list --folder="$TEAMS_FOLDER_ID" --format='value(name)' 2>/dev/null || true)"
 for p in "${expected_policies[@]}"; do

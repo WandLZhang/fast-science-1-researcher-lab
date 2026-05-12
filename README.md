@@ -392,7 +392,8 @@ What gets applied (all at the Teams folder, inherited by every department):
 - `gcp.resourceLocations` (US by default; edit `06-resource-locations.yaml` to change)
 - `compute.requireOsLogin`, `compute.vmExternalIpAccess` (deny), `compute.skipDefaultNetworkCreation`, `compute.disableSerialPortAccess`
 - `storage.uniformBucketLevelAccess`
-- `gcp.restrictServiceUsage` (allowlist of ~29 research APIs)
+- `gcp.restrictServiceUsage` (allowlist of ~36 research APIs including Marketplace partner model enablement, TPU, Earth Engine, Vision AI)
+- `vertexai.allowedPartnerModelFeatures` (allow web search + structured outputs for Anthropic Claude — **denied by default**, enforcement for Claude 4.x starts July 2026)
 
 Department admins and PIs hold `roles/orgpolicy.policyAdmin` on their own folders, so they can override any of these for a specific lab or project (e.g., a sandbox project that needs a public IP).
 
@@ -469,7 +470,7 @@ cd blueprints/research-delegation/billing
 ./grant-billing-and-verify.sh verify
 ```
 
-The script runs 6 check groups and reports `✓` / `✗` per assertion: team folder exists, team SA has the FAST-managed roles, PI group can impersonate, PI group has folderViewer + projectCreator, the 12 baseline org policies are set on the Teams folder, and the test project shows inherited `requireOsLogin` plus an attached lien plus a billing link.
+The script runs 6 check groups and reports `✓` / `✗` per assertion: team folder exists, team SA has the FAST-managed roles, PI group can impersonate, PI group has folderViewer + projectCreator, the 13 baseline org policies are set on the Teams folder, and the test project shows inherited `requireOsLogin` plus an attached lien plus a billing link.
 
 ### Operational decisions to make once
 

@@ -1,0 +1,23 @@
+# Allow advanced partner model features (web search, structured outputs) for
+# Anthropic Claude models running on Vertex AI.
+#
+# By default, the constraint vertexai.allowedPartnerModelFeatures DENIES all
+# advanced features for partner models in projects belonging to an org. Without
+# this policy, Claude's web_search tool (real-time RAG with citations) and
+# structured_outputs (JSON schema enforcement) are silently blocked.
+#
+# Enforcement timeline: for Claude Sonnet 4.0–4.5, Opus 4.0–4.5, and Haiku 4.5,
+# the default denial takes effect July 2026. This policy must be in place before
+# then or these features stop working.
+#
+# The value "publishers/anthropic" allows ALL current and future features for
+# ALL Anthropic models. To scope more tightly, use:
+#   publishers/anthropic/models/claude-sonnet-4-6:web_search
+#   publishers/anthropic/models/claude-opus-4-7:structured_outputs
+# See: https://cloud.google.com/vertex-ai/generative-ai/docs/control-model-access
+name: folders/${TEAMS_FOLDER_ID}/policies/vertexai.allowedPartnerModelFeatures
+spec:
+  rules:
+  - values:
+      allowedValues:
+      - publishers/anthropic

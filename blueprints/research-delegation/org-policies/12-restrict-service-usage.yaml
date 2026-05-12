@@ -13,6 +13,7 @@ spec:
       allowedValues:
       - accesscontextmanager.googleapis.com
       - aiplatform.googleapis.com
+      - artifactregistry.googleapis.com
       - batch.googleapis.com
       - bigquery.googleapis.com
       - bigqueryreservation.googleapis.com
@@ -20,10 +21,14 @@ spec:
       - billingbudgets.googleapis.com
       - cloudbilling.googleapis.com
       - cloudbuild.googleapis.com
+      - cloudcommerceconsumerprocurement.googleapis.com
+      - commerceagreement.googleapis.com
       - cloudkms.googleapis.com
       - cloudresourcemanager.googleapis.com
+      - cloudfunctions.googleapis.com
       - compute.googleapis.com
       - container.googleapis.com
+      - earthengine.googleapis.com
       - eventarc.googleapis.com
       - essentialcontacts.googleapis.com
       - iam.googleapis.com
@@ -32,6 +37,7 @@ spec:
       - monitoring.googleapis.com
       - notebooks.googleapis.com
       - orgpolicy.googleapis.com
+      - run.googleapis.com
       - pubsub.googleapis.com
       - servicenetworking.googleapis.com
       - serviceusage.googleapis.com
@@ -39,4 +45,6 @@ spec:
       - storage.googleapis.com
       - storage-component.googleapis.com
       - sts.googleapis.com
+      - tpu.googleapis.com
+      - visionai.googleapis.com
       - workflows.googleapis.com
