@@ -218,7 +218,6 @@ variable "folder_iam" {
     sandbox       = optional(map(list(string)), {})
     security      = optional(map(list(string)), {})
     network       = optional(map(list(string)), {})
-    teams         = optional(map(list(string)), {})
     tenants       = optional(map(list(string)), {})
   })
   nullable = false
@@ -282,7 +281,7 @@ variable "regime_mapping" {
 }
 
 variable "team_folders" {
-  description = "Team folders to be created. Format is described in a code comment."
+  description = "Team folders to be created. Format is described in a code comment. Optional dev_org_policies_preset / prod_org_policies_preset accept \"sandbox\" or \"hardened\" to apply folder-level org policies to the per-team Development / Production subfolders."
   type = map(object({
     descriptive_name         = string
     iam_by_principals        = map(list(string))
@@ -293,6 +292,8 @@ variable "team_folders" {
       name              = string
       type              = string
     }))
+    dev_org_policies_preset  = optional(string)
+    prod_org_policies_preset = optional(string)
   }))
   default = null
 }

@@ -58,38 +58,40 @@ Fill in your values for researcher project provisioning. These feed into the pro
 
 By this point L0 is assumed fully deployed (all ✅). This diagram tracks L1 project factory progress.
 
+**Unspecified regime** (default): L0 bootstrap projects sit at the org root; L1 adds department folders as siblings (no `Teams/` wrapper). For compliance regimes, both L0 bootstrap projects and L1 department folders live inside the AW workload folder (named after the regime, e.g., `il5`).
+
 ```mermaid
 graph TB
     ORG["🏢 GCP Organization"]
 
-    ORG --> AW["📁 StellarEngine-PREFIX<br/><i>✅ Deployed — L0</i>"]
+    ORG --> P1["📦 PREFIX-prod-iac-core-0<br/><i>✅ L0 — Automation</i>"]
+    ORG --> P2["📦 PREFIX-prod-audit-logs-0<br/><i>✅ L0 — Audit Logging</i>"]
+    ORG --> P3["📦 PREFIX-prod-billing-exp-0<br/><i>✅ L0 — Billing Export</i>"]
 
-    AW --> CS["📁 Common Services<br/><i>✅ Deployed — L0</i>"]
-    AW --> NET["📁 Networking<br/><i>✅ Deployed — L0</i>"]
-    AW --> SEC["📁 Security<br/><i>✅ Deployed — L0</i>"]
-    AW --> PROD["📁 Prod<br/><i>✅ Deployed — L0</i>"]
-
-    CS --> P1["📦 PREFIX-prod-iac-core-0<br/><i>✅ Automation</i>"]
-
+    ORG --> NET["📁 Networking<br/><i>✅ Deployed — L0</i>"]
     NET --> P4["📦 PREFIX-net-core-0<br/><i>✅ Hub VPC + NCC Hub</i>"]
     NET --> P5["📦 PREFIX-net-prod-0<br/><i>✅ Prod Spoke VPC</i>"]
 
+    ORG --> SEC["📁 Security<br/><i>✅ Deployed — L0</i>"]
     SEC --> P9["📦 PREFIX-prod-sec-core-0<br/><i>✅ Prod KMS</i>"]
 
-    PROD --> PF["📁 Project Factory<br/><i>⏳ Planned — L1</i>"]
-    PF --> RP1["📦 PREFIX-dept-researcher<br/><i>⏳ First researcher project</i>"]
+    ORG --> ENG["📁 engineering<br/><i>⏳ Planned — L1 team_folders</i>"]
+    ENG --> ENGD["📁 Development<br/><i>⏳ sandbox preset (optional)</i>"]
+    ENG --> ENGP["📁 Production<br/><i>⏳ hardened preset (optional)</i>"]
+    ENGD --> RP1["📦 PREFIX-engineering-researcher<br/><i>⏳ First researcher project</i>"]
 
     style ORG fill:#fff,stroke:#333,stroke-width:2px
-    style AW fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
-    style CS fill:#e8f5e9,stroke:#2e7d32
     style NET fill:#fff3e0,stroke:#e65100
     style SEC fill:#fce4ec,stroke:#c62828
-    style PROD fill:#f3e5f5,stroke:#6a1b9a
     style P1 fill:#e8f5e9,stroke:#2e7d32
+    style P2 fill:#e8f5e9,stroke:#2e7d32
+    style P3 fill:#e8f5e9,stroke:#2e7d32
     style P4 fill:#fff3e0,stroke:#e65100
     style P5 fill:#fff3e0,stroke:#e65100
     style P9 fill:#fce4ec,stroke:#c62828
-    style PF stroke-dasharray: 5 5,stroke:#90a4ae,fill:#fafafa
+    style ENG stroke-dasharray: 5 5,stroke:#90a4ae,fill:#fafafa
+    style ENGD stroke-dasharray: 5 5,stroke:#90a4ae,fill:#fafafa
+    style ENGP stroke-dasharray: 5 5,stroke:#90a4ae,fill:#fafafa
     style RP1 stroke-dasharray: 5 5,stroke:#90a4ae,fill:#fafafa
 ```
 
@@ -315,30 +317,41 @@ All artifacts for this pattern live in `blueprints/research-delegation/`. They'r
 ### Architecture
 
 ```
-GCP Org
-└── StellarEngine-<prefix>                          (L0 Stage 0)
-    ├── Common Services / Networking / Security / Prod   (L0)
-    └── Teams                                        (L0 Stage 1, fast_features.teams = true)
-        ├── <baseline org policies inherited down>   (blueprints/.../org-policies/)
-        ├── <auto-lien CF watches new projects>     (blueprints/.../auto-lien/)
-        │
-        ├── Engineering                              (one team_folders entry per dept)
-        │   ├── <dept admin: folderAdmin + orgpolicy.policyAdmin>
-        │   ├── <PI group: folderViewer + projectCreator + folderCreator + orgpolicy.policyAdmin>
-        │   ├── prod-teams-engineering-0 SA          (FAST-managed, scoped to subtree)
-        │   ├── jdoe-lab/                            (PI subfolder, PI created)
-        │   │   ├── jdoe-genomics-2026 (sandbox)    (loose policies, no lien)
-        │   │   └── jdoe-prod-pipeline (hardened)   (strict policies + lien)
-        │   └── ...
-        ├── Computational Sciences
-        └── ...
+GCP Org                                              (unspecified regime: no wrapper)
+├── <prefix>-prod-iac-core-0                        (L0 — Terraform automation)
+├── <prefix>-prod-audit-logs-0                      (L0)
+├── <prefix>-prod-billing-exp-0                     (L0)
+├── Networking / Security / Prod                    (L0 Stage 1 folders)
+│
+├── Engineering                                     (one team_folders entry per dept)
+│   ├── <dept admin: folderAdmin + orgpolicy.policyAdmin>
+│   ├── <PI group: folderViewer + projectCreator + folderCreator + orgpolicy.policyAdmin>
+│   ├── <baseline org policies inherited down>
+│   ├── <auto-lien CF watches new projects>
+│   ├── prod-teams-engineering-0 SA                 (FAST-managed, scoped to subtree)
+│   │
+│   ├── Development                                 (sandbox preset — loose policies)
+│   │   └── jdoe-genomics-2026                      (PI-created via Console)
+│   │
+│   ├── Production                                  (hardened preset — strict policies + lien)
+│   │   └── jdoe-prod-pipeline
+│   │
+│   └── jdoe-lab/                                   (optional PI subfolder)
+│       └── ...
+│
+├── Computational Sciences                          (sibling to Engineering)
+└── ...
+
+(Compliance regime: the same structure lives inside an AW workload folder
+named after the regime, e.g., "il5" — at the org root, sibling to the
+unspecified deployment's projects above.)
 ```
 
 ### What "delegated" means here
 
 | Layer | Held by | Can do |
 |---|---|---|
-| **Org policies (baseline)** | IT, on `Teams` folder | Apply 7 managed + classic constraints once; cascades to all departments. Set in dry-run, promoted to enforced after Policy Simulator. |
+| **Org policies (baseline)** | IT, on each dept folder (or org-wide via L0) | Department-level baseline applies once and cascades to that dept's Dev/Prod subfolders. Folder-level **`sandbox`** / **`hardened`** presets are built in — opt in per-team via `dev_org_policies_preset` / `prod_org_policies_preset` in the `team_folders` tfvar. |
 | **Org policy overrides** | Dept admins + PI groups, on their own folders/projects | Loosen or tighten any inherited policy on their subtree. Sandbox project template loosens `vmExternalIpAccess` etc.; hardened template re-enforces. |
 | **Project creation** | PI group, in their dept folder via Console (or PI subfolder if used) | Click "New Project", pick parent = their folder, billing auto-attaches to master account. No IT round-trip. |
 | **Lien protection** | Central CF (Eventarc) | Auto-attaches deletion lien to every Console-created project under the Teams folder. PI-attempted delete returns FAILED_PRECONDITION. Lien removal requires IT. |

@@ -155,7 +155,7 @@ locals {
       networking         = try(module.branch-network-folder.id, null)
       sandbox            = try(module.branch-sandbox-folder[0].id, null)
       security           = try(module.branch-security-folder.id, null)
-      teams              = try(module.branch-teams-folder[0].id, null)
+      teams              = var.assured_workloads.folder
       envs               = try(local.env_folder_ids, null)
     },
     {
@@ -310,25 +310,15 @@ locals {
         sa            = module.branch-sandbox-sa[0].email
       })
     },
-    !var.fast_features.teams ? {} : merge(
-      {
-        "3-teams" = templatefile(local._tpl_providers, {
-          backend_extra = null
-          bucket        = module.branch-teams-gcs[0].name
-          name          = "teams"
-          sa            = module.branch-teams-sa[0].email
-        })
-      },
-      {
-        for k, v in module.branch-teams-team-sa :
-        "3-teams-${k}" => templatefile(local._tpl_providers, {
-          backend_extra = null
-          bucket        = module.branch-teams-team-gcs[k].name
-          name          = "teams"
-          sa            = v.email
-        })
-      }
-    )
+    !var.fast_features.teams ? {} : {
+      for k, v in module.branch-teams-team-sa :
+      "3-teams-${k}" => templatefile(local._tpl_providers, {
+        backend_extra = null
+        bucket        = module.branch-teams-team-gcs[k].name
+        name          = "teams"
+        sa            = v.email
+      })
+    }
   )
   service_accounts = merge(
     {
@@ -353,7 +343,6 @@ locals {
       sandbox                = try(module.branch-sandbox-sa[0].email, null)
       security               = module.branch-security-sa.email
       security-r             = module.branch-security-r-sa.email
-      teams                  = try(module.branch-teams-sa[0].email, null)
     },
     {
       for k, v in module.branch-teams-team-sa : "team-${k}" => v.email

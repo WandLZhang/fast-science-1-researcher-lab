@@ -17,59 +17,62 @@
 # tfdoc:file:description Team stage resources.
 
 locals {
-  # FAST-specific IAM
-  _teams_folder_fast_iam = !var.fast_features.teams ? {} : {
-    "roles/logging.admin"                  = [module.branch-teams-sa[0].iam_email]
-    "roles/owner"                          = [module.branch-teams-sa[0].iam_email]
-    "roles/resourcemanager.folderAdmin"    = [module.branch-teams-sa[0].iam_email]
-    "roles/resourcemanager.projectCreator" = [module.branch-teams-sa[0].iam_email]
-    "roles/compute.xpnAdmin"               = [module.branch-teams-sa[0].iam_email]
-  }
-  # deep-merge FAST-specific IAM with user-provided bindings in var.folder_iam
-  _teams_folder_iam = merge(
-    var.folder_iam.teams,
-    {
-      for role, principals in local._teams_folder_fast_iam :
-      role => distinct(concat(principals, lookup(var.folder_iam.teams, role, [])))
+  # Folder-level org policy presets applied to per-team Development and
+  # Production folders. Use dev_org_policies_preset / prod_org_policies_preset
+  # on each var.team_folders.<team> entry to opt in.
+  #
+  # PIs and team admins retain orgpolicy.policyAdmin on the team folder via
+  # iam_by_principals (which compiles to non-authoritative
+  # google_folder_iam_member resources), so per-project overrides remain
+  # possible — addresses MSU L1 Issue #1 part 3.
+  folder_org_policy_presets = {
+    sandbox = {
+      "compute.vmExternalIpAccess"         = { rules = [{ allow = { all = true } }] }
+      "compute.requireOsLogin"             = { rules = [{ enforce = false }] }
+      "compute.skipDefaultNetworkCreation" = { rules = [{ enforce = false }] }
+      "gcp.restrictServiceUsage"           = { rules = [{ allow = { all = true } }] }
     }
-  )
-}
-
-module "branch-teams-folder" {
-  source       = "../../../modules/folder"
-  count        = var.fast_features.teams ? 1 : 0
-  parent       = var.assured_workloads.folder
-  name         = "Teams"
-  iam          = local._teams_folder_iam
-  tag_bindings = null
-}
-
-module "branch-teams-sa" {
-  source       = "../../../modules/iam-service-account"
-  count        = var.fast_features.teams ? 1 : 0
-  project_id   = var.automation.project_id
-  name         = "prod-resman-teams-0"
-  display_name = "Terraform resman teams service account."
-  prefix       = var.prefix
-  iam_project_roles = {
-    (var.automation.project_id) = ["roles/serviceusage.serviceUsageConsumer"]
-  }
-  iam_storage_roles = {
-    (var.automation.outputs_bucket) = ["roles/storage.objectAdmin"]
+    hardened = {
+      "compute.vmExternalIpAccess"           = { rules = [{ deny = { all = true } }] }
+      "compute.requireOsLogin"               = { rules = [{ enforce = true }] }
+      "compute.skipDefaultNetworkCreation"   = { rules = [{ enforce = true }] }
+      "compute.disableSerialPortAccess"      = { rules = [{ enforce = true }] }
+      "iam.disableServiceAccountKeyCreation" = { rules = [{ enforce = true }] }
+    }
   }
 }
 
-module "branch-teams-gcs" {
-  source        = "../../../modules/gcs"
-  count         = var.fast_features.teams ? 1 : 0
-  project_id    = var.automation.project_id
-  name          = "prod-resman-teams-0"
-  prefix        = var.prefix
-  location      = var.regions.primary
-  storage_class = local.gcs_storage_class
-  versioning    = true
-  iam = {
-    "roles/storage.objectAdmin" = [module.branch-teams-sa[0].iam_email]
+# REMOVED: module "branch-teams-folder" (the "Teams/" wrapper).
+# Team folders now nest directly under var.assured_workloads.folder, which
+# L0 resolves to either the organization root (COMPLIANCE_REGIME_UNSPECIFIED)
+# or the AW workload folder (compliance regime). Schools end up as siblings
+# to the L0 bootstrap projects, not buried under a "Teams/" intermediate.
+#
+# Backwards-compat migration: forget the old Teams folder from state; the
+# empty folder is left in GCP for manual cleanup via:
+#   gcloud resource-manager folders delete <TEAMS_FOLDER_ID>
+removed {
+  from = module.branch-teams-folder
+  lifecycle {
+    destroy = false
+  }
+}
+
+# REMOVED: module "branch-teams-sa" and module "branch-teams-gcs" — these
+# were a separate-stage automation SA + state bucket meant to manage the now-
+# deleted Teams wrapper folder. Fast Science manages team folders in this
+# resman stage directly, so they had no remaining purpose. Per-team SAs and
+# state buckets (branch-teams-team-sa / -gcs) are kept.
+removed {
+  from = module.branch-teams-sa
+  lifecycle {
+    destroy = true
+  }
+}
+removed {
+  from = module.branch-teams-gcs
+  lifecycle {
+    destroy = true
   }
 }
 
@@ -77,7 +80,7 @@ module "branch-teams-gcs" {
 module "branch-teams-team-folder" {
   source   = "../../../modules/folder"
   for_each = var.fast_features.teams ? coalesce(var.team_folders, {}) : {}
-  parent   = module.branch-teams-folder[0].id
+  parent   = var.assured_workloads.folder
   name     = each.value.descriptive_name
   iam = {
     "roles/logging.admin"                  = [module.branch-teams-team-sa[each.key].iam_email]
@@ -145,6 +148,7 @@ module "branch-teams-team-dev-folder" {
     "roles/viewer"                               = local.branch_optional_r_sa_lists.pf-dev
     (var.custom_roles.organization_admin_viewer) = local.branch_optional_r_sa_lists.pf-dev
   }
+  org_policies = try(local.folder_org_policy_presets[each.value.dev_org_policies_preset], {})
   tag_bindings = null
 }
 
@@ -168,5 +172,6 @@ module "branch-teams-team-prod-folder" {
     "roles/viewer"                               = local.branch_optional_r_sa_lists.pf-prod
     (var.custom_roles.organization_admin_viewer) = local.branch_optional_r_sa_lists.pf-prod
   }
+  org_policies = try(local.folder_org_policy_presets[each.value.prod_org_policies_preset], {})
   tag_bindings = null
 }
