@@ -209,9 +209,13 @@ variable "fast_features" {
     data_platform   = optional(bool, false)
     gke             = optional(bool, false)
     gcve            = optional(bool, false)
-    project_factory = optional(bool, false)
+    project_factory = optional(bool, true)
     sandbox         = optional(bool, false)
-    teams           = optional(bool, false)
+    # teams defaults to true because dept-folder creation is THE primary L1
+    # function in the Fast Science delegation model. Nothing is created unless
+    # var.team_folders also has entries, so leaving teams=true when team_folders
+    # is null/empty is safe and inert.
+    teams = optional(bool, true)
   })
   default  = {}
   nullable = false

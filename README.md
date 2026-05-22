@@ -43,14 +43,13 @@ Fill in your values for researcher project provisioning. These feed into the pro
 | # | Question | Your Value | Where It Goes |
 |---|----------|-----------|---------------|
 | 1 | **L0 Prefix** (same prefix used in L0 Stage 0) | `________` | Used to find outputs bucket: `<prefix>-prod-iac-core-outputs-0` |
-| 2 | **Domain** (same as L0) | `________` | `envs_folders.Prod.admin` group domain |
-| 3 | **Prod folder ID** (from L0 Stage 1 output) | `________` | `parent` in project YAML (optional — defaults to Prod folder) |
-| 4 | **Department name** (e.g. `pathology`, `genomics`) | `________` | Project YAML filename + labels |
-| 5 | **Researcher name** (e.g. `medsiglip`, `rnaseq`) | `________` | Project YAML filename + labels |
-| 6 | **Workload type** — `medsiglip-pathology`, `nextflow-batch`, or custom | `________` | Determines which APIs and IAM roles to include |
-| 7 | **Network project** (from L0 Stage 2 output, e.g. `net-prod-0`) | `________` | `shared_vpc_service_config.host_project` in YAML |
-| 8 | **Subnet region/name** (from L0 Stage 2, e.g. `us-central1/default`) | `________` | `service_agent_subnet_iam` key in YAML |
-| 9 | **Budget (monthly)** (optional) | `________` | Budget alert threshold |
+| 2 | **Domain** (same as L0) | `________` | Email domain for admin groups in `team_folders.<dept>.iam_by_principals` and `department_admin_principals` |
+| 3 | **Department list** (e.g. `engineering`, `medicine`, `arts`) | `________` | One entry per department in `team_folders` tfvar; map key becomes folder name AND tag value |
+| 4 | **Per-department admin group** (e.g. `gcp-soe-admins@yourdomain.edu`) | `________` | `team_folders.<dept>.department_admin_principals` — gets folder-scoped `orgpolicy.policyAdmin` via IAM condition |
+| 5 | **Workload type** — `medsiglip-pathology`, `nextflow-batch`, or custom | `________` | Determines which APIs and IAM roles to include in PF YAML (if using PF) |
+| 6 | **Network project** (from L0 Stage 2 output, e.g. `net-prod-0`) | `________` | `shared_vpc_service_config.host_project` in PF YAML |
+| 7 | **Subnet region/name** (from L0 Stage 2, e.g. `us-central1/prod-default`) | `________` | `service_agent_subnet_iam` key in PF YAML |
+| 8 | **Budget (monthly)** (optional) | `________` | Budget alert threshold |
 
 ---
 
@@ -126,24 +125,38 @@ cd fast/stages-aw/1-resman
 # Copy and paste the output commands
 ```
 
-Create `terraform.tfvars` with the following content:
+Create `terraform.tfvars` with your department definitions:
 
 ```hcl
-envs_folders = {
-  Prod = { admin = "group:gcp-organization-admins@yourdomain.com" }
-}
-
-fast_features = {
-  envs            = true
-  project_factory = true
+team_folders = {
+  engineering = {
+    descriptive_name            = "School of Engineering"
+    iam_by_principals           = {
+      "group:gcp-soe-admins@yourdomain.edu" = ["roles/resourcemanager.folderAdmin"]
+    }
+    impersonation_principals    = ["group:gcp-soe-admins@yourdomain.edu"]
+    department_admin_principals = ["group:gcp-soe-admins@yourdomain.edu"]
+    dev_org_policies_preset     = "sandbox"
+    prod_org_policies_preset    = "hardened"
+  }
+  medicine = {
+    descriptive_name            = "School of Medicine"
+    iam_by_replicas             = {}  # fill in
+    impersonation_principals    = ["group:gcp-som-admins@yourdomain.edu"]
+    department_admin_principals = ["group:gcp-som-admins@yourdomain.edu"]
+    dev_org_policies_preset     = "sandbox"
+    prod_org_policies_preset    = "hardened"
+  }
+  # add one entry per department
 }
 ```
 
-Apply. The `0-globals.auto.tfvars.json` overrides `terraform.tfvars` for `fast_features`, so pass via `-var`:
+`fast_features.teams = true` and `fast_features.project_factory = true` are defaults — you don't need to set them. If a `0-globals.auto.tfvars.json` from L0 overrides them, pass via `-var`:
 
 ```bash
 terraform init
-terraform apply -var='fast_features={envs=true, project_factory=true}'
+terraform apply
+# (only if overridden:) terraform apply -var='fast_features={teams=true, project_factory=true}'
 ```
 
 ### Step 2 — Set up the project factory stage
