@@ -58,29 +58,35 @@ Fill in your values for researcher project provisioning. These feed into the pro
 
 By this point L0 is assumed fully deployed (all ✅). This diagram tracks L1 project factory progress.
 
-**Unspecified regime** (default): L0 bootstrap projects sit at the org root; L1 adds department folders as siblings (no `Teams/` wrapper). For compliance regimes, both L0 bootstrap projects and L1 department folders live inside the AW workload folder (named after the regime, e.g., `il5`).
+**Unspecified regime** (default): L0 creates an `it-services` wrapper folder containing bootstrap + Networking + Security; L1 creates each department folder as a **sibling of `it-services`** at the org root. Each department folder is tagged `department=<name>` so L0's pre-created tag key + IAM conditions can give school admins folder-scoped org-policy authority without org-wide reach. For compliance regimes, both `it-services` content and department folders live inside the AW workload folder (named after the regime, e.g., `il5`).
 
 ```mermaid
 graph TB
     ORG["🏢 GCP Organization"]
+    TAG["🏷️ Tag key: department<br/><i>✅ L0 — org-level tag</i>"]
 
-    ORG --> P1["📦 PREFIX-prod-iac-core-0<br/><i>✅ L0 — Automation</i>"]
-    ORG --> P2["📦 PREFIX-prod-audit-logs-0<br/><i>✅ L0 — Audit Logging</i>"]
-    ORG --> P3["📦 PREFIX-prod-billing-exp-0<br/><i>✅ L0 — Billing Export</i>"]
+    ORG --> TAG
+    ORG --> IT["📁 it-services<br/><i>✅ L0 — managed folder</i>"]
 
-    ORG --> NET["📁 Networking<br/><i>✅ Deployed — L0</i>"]
+    IT --> P1["📦 PREFIX-prod-iac-core-0<br/><i>✅ L0 — Automation</i>"]
+    IT --> P2["📦 PREFIX-prod-audit-logs-0<br/><i>✅ L0 — Audit Logging</i>"]
+    IT --> P3["📦 PREFIX-prod-billing-exp-0<br/><i>✅ L0 — Billing Export</i>"]
+
+    IT --> NET["📁 Networking<br/><i>✅ Deployed — L0</i>"]
     NET --> P4["📦 PREFIX-net-core-0<br/><i>✅ Hub VPC + NCC Hub</i>"]
     NET --> P5["📦 PREFIX-net-prod-0<br/><i>✅ Prod Spoke VPC</i>"]
 
-    ORG --> SEC["📁 Security<br/><i>✅ Deployed — L0</i>"]
+    IT --> SEC["📁 Security<br/><i>✅ Deployed — L0</i>"]
     SEC --> P9["📦 PREFIX-prod-sec-core-0<br/><i>✅ Prod KMS</i>"]
 
-    ORG --> ENG["📁 engineering<br/><i>⏳ Planned — L1 team_folders</i>"]
+    ORG --> ENG["📁 engineering<br/><i>⏳ Planned — L1 team_folders entry</i><br/>🏷️ department=engineering"]
     ENG --> ENGD["📁 Development<br/><i>⏳ sandbox preset (optional)</i>"]
     ENG --> ENGP["📁 Production<br/><i>⏳ hardened preset (optional)</i>"]
-    ENGD --> RP1["📦 PREFIX-engineering-researcher<br/><i>⏳ First researcher project</i>"]
+    ENGD --> RP1["📦 researcher projects<br/><i>⏳ IT (PF) or PIs (Console)</i>"]
 
     style ORG fill:#fff,stroke:#333,stroke-width:2px
+    style TAG fill:#fff3e0,stroke:#e65100
+    style IT fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
     style NET fill:#fff3e0,stroke:#e65100
     style SEC fill:#fce4ec,stroke:#c62828
     style P1 fill:#e8f5e9,stroke:#2e7d32
@@ -317,21 +323,29 @@ All artifacts for this pattern live in `blueprints/research-delegation/`. They'r
 ### Architecture
 
 ```
-GCP Org                                              (unspecified regime: no wrapper)
-├── <prefix>-prod-iac-core-0                        (L0 — Terraform automation)
-├── <prefix>-prod-audit-logs-0                      (L0)
-├── <prefix>-prod-billing-exp-0                     (L0)
-├── Networking / Security / Prod                    (L0 Stage 1 folders)
+GCP Org                                              (unspecified regime)
+│
+├── 🏷️ Tag key: department                          (L0 — org-level tag)
+│
+├── it-services                                     (L0 — managed wrapper folder)
+│   ├── <prefix>-prod-iac-core-0                   (L0 — Terraform automation)
+│   ├── <prefix>-prod-audit-logs-0                 (L0)
+│   ├── <prefix>-prod-billing-exp-0                (L0)
+│   ├── Networking                                 (L0 Stage 1)
+│   └── Security                                   (L0 Stage 1)
 │
 ├── Engineering                                     (one team_folders entry per dept)
-│   ├── <dept admin: folderAdmin + orgpolicy.policyAdmin>
-│   ├── <PI group: folderViewer + projectCreator + folderCreator + orgpolicy.policyAdmin>
-│   ├── <baseline org policies inherited down>
-│   ├── <auto-lien CF watches new projects>
-│   ├── prod-teams-engineering-0 SA                 (FAST-managed, scoped to subtree)
+│   │  Tagged: department=engineering              (L1 — google_tags_tag_binding)
+│   │  IAM:
+│   │    - dept admin group: folderAdmin, projectCreator, billing.user
+│   │    - dept admin group: orgpolicy.policyAdmin at ORG with IAM condition
+│   │        resource.matchTag('<ORG>/department', 'engineering')
+│   │        → scoped to THIS folder's subtree only
+│   │    - prod-teams-engineering-0 SA              (FAST-managed, scoped to subtree)
 │   │
 │   ├── Development                                 (sandbox preset — loose policies)
-│   │   └── jdoe-genomics-2026                      (PI-created via Console)
+│   │   ├── jdoe-genomics-2026                     (PI-created via Console)
+│   │   └── (or projects created by IT via L1 project factory)
 │   │
 │   ├── Production                                  (hardened preset — strict policies + lien)
 │   │   └── jdoe-prod-pipeline
@@ -339,12 +353,14 @@ GCP Org                                              (unspecified regime: no wra
 │   └── jdoe-lab/                                   (optional PI subfolder)
 │       └── ...
 │
-├── Computational Sciences                          (sibling to Engineering)
+├── Computational Sciences                          (sibling to Engineering at ORG ROOT)
+│   │  Tagged: department=comp-sci
+│   └── ...
 └── ...
 
-(Compliance regime: the same structure lives inside an AW workload folder
+(Compliance regime: department folders live INSIDE the AW workload folder
 named after the regime, e.g., "il5" — at the org root, sibling to the
-unspecified deployment's projects above.)
+unspecified deployment's it-services folder and dept folders.)
 ```
 
 ### What "delegated" means here
@@ -352,7 +368,7 @@ unspecified deployment's projects above.)
 | Layer | Held by | Can do |
 |---|---|---|
 | **Org policies (baseline)** | IT, on each dept folder (or org-wide via L0) | Department-level baseline applies once and cascades to that dept's Dev/Prod subfolders. Folder-level **`sandbox`** / **`hardened`** presets are built in — opt in per-team via `dev_org_policies_preset` / `prod_org_policies_preset` in the `team_folders` tfvar. |
-| **Org policy overrides** | Dept admins + PI groups, on their own folders/projects | Loosen or tighten any inherited policy on their subtree. Sandbox project template loosens `vmExternalIpAccess` etc.; hardened template re-enforces. |
+| **Org policy overrides** | Dept admins, via `roles/orgpolicy.policyAdmin` granted at the org with an IAM condition restricting the role to resources tagged `department=<this dept>` | Loosen or tighten any inherited policy on their subtree. The predefined `orgpolicy.policyAdmin` is org-scope-only and its write permissions cannot be put in custom roles (verified empirically) — IAM conditions + tags are the [Google-documented pattern](https://cloud.google.com/iam/docs/conditions-overview) for folder-scoped delegation. Set `department_admin_principals` in your `team_folders` tfvars entry to opt in. |
 | **Project creation** | PI group, in their dept folder via Console (or PI subfolder if used) | Click "New Project", pick parent = their folder, billing auto-attaches to master account. No IT round-trip. |
 | **Lien protection** | Central CF (Eventarc) | Auto-attaches deletion lien to every Console-created project under the Teams folder. PI-attempted delete returns FAILED_PRECONDITION. Lien removal requires IT. |
 | **Billing attachment** | PI group + team SA, on master billing account | `roles/billing.user` granted on the master account so PIs can link new projects without org-level billing rights. |

@@ -143,7 +143,6 @@ locals {
       })
     )
   }
-  env_folder_ids = { for k, v in module.branch-envs-folders : k => try(v.folder.id, null) }
   folder_ids = merge(
     {
       data-platform-dev  = try(module.branch-dp-dev-folder[0].id, null)
@@ -156,7 +155,6 @@ locals {
       sandbox            = try(module.branch-sandbox-folder[0].id, null)
       security           = try(module.branch-security-folder.id, null)
       teams              = var.assured_workloads.folder
-      envs               = try(local.env_folder_ids, null)
     },
     {
       for k, v in module.branch-teams-team-folder :
@@ -367,17 +365,9 @@ locals {
       tf_var_files      = local.cicd_workflow_var_files.stage_3
     }
   }
-  tenant_accounts = { for k, v in local.tenant_envs : k => {
-    main_project    = module.tenant-self-main-projects[k].id
-    env             = v.env
-    tenant          = v.tenant
-    admin_principal = var.tenants[v.tenant].admin_principal
-  } }
   tfvars = {
     folder_ids       = local.folder_ids
-    envs_folders     = var.envs_folders
     service_accounts = local.service_accounts
-    tenant_accounts  = local.tenant_accounts
   }
 }
 
@@ -395,6 +385,20 @@ output "cicd_repositories" {
   }
 }
 
+output "project_factories" {
+  description = "Data for the project factories stage."
+  value = !var.fast_features.project_factory ? {} : {
+    dev = {
+      bucket = module.branch-pf-dev-gcs[0].name
+      sa     = module.branch-pf-dev-sa[0].email
+    }
+    prod = {
+      bucket = module.branch-pf-prod-gcs[0].name
+      sa     = module.branch-pf-prod-sa[0].email
+    }
+  }
+}
+
 output "dataplatform" {
   description = "Data for the Data Platform stage."
   value = !var.fast_features.data_platform ? {} : {
@@ -409,11 +413,6 @@ output "dataplatform" {
       service_account = module.branch-dp-prod-sa[0].email
     }
   }
-}
-
-output "envs" {
-  description = "Environments folders created for the tenants."
-  value       = try(module.branch-envs-folders, null)
 }
 
 output "gcve" {
@@ -464,20 +463,6 @@ output "networking" {
     folder          = module.branch-network-folder.id
     gcs_bucket      = module.branch-network-gcs.name
     service_account = module.branch-network-sa.iam_email
-  }
-}
-
-output "project_factories" {
-  description = "Data for the project factories stage."
-  value = !var.fast_features.project_factory ? {} : {
-    dev = {
-      bucket = module.branch-pf-dev-gcs[0].name
-      sa     = module.branch-pf-dev-sa[0].email
-    }
-    prod = {
-      bucket = module.branch-pf-prod-gcs[0].name
-      sa     = module.branch-pf-prod-sa[0].email
-    }
   }
 }
 

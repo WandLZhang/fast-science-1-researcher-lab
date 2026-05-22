@@ -80,8 +80,13 @@ removed {
 module "branch-teams-team-folder" {
   source   = "../../../modules/folder"
   for_each = var.fast_features.teams ? coalesce(var.team_folders, {}) : {}
-  parent   = var.assured_workloads.folder
-  name     = each.value.descriptive_name
+  # parent: var.dept_folder_parent — for unspecified regime, this is the
+  # ORG ROOT (department folders sit as siblings to it-services). For
+  # compliance, it's the AW workload folder (so departments inherit the
+  # regime). Different from var.assured_workloads.folder which always
+  # points at where IT stuff lives.
+  parent = var.dept_folder_parent
+  name   = each.value.descriptive_name
   iam = {
     "roles/logging.admin"                  = [module.branch-teams-team-sa[each.key].iam_email]
     "roles/owner"                          = [module.branch-teams-team-sa[each.key].iam_email]
@@ -174,4 +179,53 @@ module "branch-teams-team-prod-folder" {
   }
   org_policies = try(local.folder_org_policy_presets[each.value.prod_org_policies_preset], {})
   tag_bindings = null
+}
+
+# Per-department tag value under L0's department tag key. Tag value short
+# name = the team_folders map key (e.g., "engineering"). Used by the
+# conditional IAM binding below to scope orgpolicy.policyAdmin to this
+# department's folder subtree only.
+resource "google_tags_tag_value" "department" {
+  for_each    = var.fast_features.teams ? coalesce(var.team_folders, {}) : {}
+  parent      = var.department_tag.key_id
+  short_name  = each.key
+  description = "Department tag value for ${each.value.descriptive_name}. Bound to the department's folder; referenced by IAM conditions delegating org-policy admin authority."
+}
+
+# Bind the tag value to the department folder. Tag inheritance means all
+# resources nested inside the folder (Development, Production, projects)
+# also match the tag, so the IAM condition below covers the whole subtree.
+resource "google_tags_tag_binding" "department" {
+  for_each  = var.fast_features.teams ? coalesce(var.team_folders, {}) : {}
+  parent    = "//cloudresourcemanager.googleapis.com/${module.branch-teams-team-folder[each.key].id}"
+  tag_value = google_tags_tag_value.department[each.key].id
+}
+
+# Conditional org-level grant of roles/orgpolicy.policyAdmin to the
+# department's admin principals, scoped by IAM condition matching the
+# department's tag. The role itself is org-scope-only (predefined role
+# cannot be granted at folder level, and the underlying orgpolicy.*
+# write permissions cannot be put in custom roles — verified empirically
+# 2026-05-22), but the IAM condition resource.matchTag(...) restricts the
+# effective grant to resources tagged with this department's tag value.
+# Pattern from https://cloud.google.com/iam/docs/conditions-overview
+resource "google_organization_iam_member" "dept_orgpolicy_admin" {
+  for_each = var.fast_features.teams ? merge([
+    for k, v in coalesce(var.team_folders, {}) : {
+      for principal in v.department_admin_principals :
+      "${k}-${principal}" => {
+        dept_key  = k
+        principal = principal
+      }
+    }
+  ]...) : {}
+
+  org_id = var.department_tag.org_id
+  role   = "roles/orgpolicy.policyAdmin"
+  member = each.value.principal
+  condition {
+    title       = "dept_${each.value.dept_key}_only"
+    description = "Restricts orgpolicy.policyAdmin to resources tagged ${var.department_tag.key_short_name}=${each.value.dept_key}."
+    expression  = "resource.matchTag(\"${var.department_tag.org_id}/${var.department_tag.key_short_name}\", \"${each.value.dept_key}\")"
+  }
 }
