@@ -1,0 +1,37 @@
+# Sample tfvars snippet to enable the Palo Alto NGFW NVA journey path on
+# the hub-and-spokes-nva dataset.
+#
+# This file is intentionally suffixed `.sample` so Terraform does NOT
+# auto-load it. To activate the Palo Alto path:
+#
+#   1. Copy this file next to the others passed to terraform, e.g.
+#        cp paloalto.auto.tfvars.sample <your-tfvars-dir>/paloalto.auto.tfvars
+#      (any filename ending in `.auto.tfvars` in the run directory is
+#      auto-loaded by Terraform.)
+#   2. Edit panorama_server (required) and any optional values below.
+#   3. terraform plan/apply against the hub-and-spokes-nva dataset.
+#
+# When `paloalto.enabled = false` (the default) every Palo Alto resource
+# in this stage is gated off and the three mngt/trust/untrust VPCs simply
+# sit empty.
+
+paloalto = {
+  enabled = true
+
+  # REQUIRED: on-prem Panorama IP rendered into init-cfg.txt so the
+  # VM-Series instances auto-register on first boot.
+  panorama_server = "10.37.1.10"
+
+  # Short project name (resolved through context.project_ids). The
+  # mngt/trust/untrust VPCs in this dataset are created in this project,
+  # so it must match their project_id.
+  networking_project = "net-prod-0"
+
+  # Optional overrides (defaults shown):
+  # firewall_image      = "projects/paloaltonetworksgcp-public/global/images/vmseries-flex-byol-1026"
+  # machine_type        = "n2-standard-4"
+  # instances_per_mig   = 2
+  # ssh_public_key_file = "~/.ssh/id_rsa.pub"
+  # mngt_cidr           = "10.75.0.0/24"
+  # onprem_cidr         = "10.0.0.0/8"
+}

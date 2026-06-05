@@ -1,0 +1,26 @@
+# skip boilerplate check
+---
+# start of document (---) avoids errors if the file only contains comments
+
+# yaml-language-server: $schema=../../../schemas/ncc-hub.schema.json
+
+# NCC hub for the Palo Alto NVA path on this dataset. STAR topology with
+# `center` and `edge` groups: trust + mngt sit on the `center` side (the
+# Palo NGFW landing zone), while application/agency spokes added later
+# attach to `edge` so all east/west transit hairpins through center.
+# The existing dev/prod/hub/dmz VPCs in this dataset use the in-band NVA
+# (router + ILB) for transit and are deliberately NOT NCC spokes.
+
+name: hub
+project_id: $project_ids:net-core-0
+preset_topology: STAR
+groups:
+  center:
+    auto_accept:
+      - $project_ids:net-core-0
+      - $project_ids:net-prod-0
+  edge:
+    auto_accept:
+      - $project_ids:net-core-0
+      - $project_ids:net-prod-0
+      - $project_ids:net-dev-0

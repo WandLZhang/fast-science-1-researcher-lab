@@ -10,6 +10,9 @@ networks:
   - $networks:hub
   - $networks:dmz
   - $networks:prod
+  - $networks:mngt
+  - $networks:trust
+  - $networks:untrust
 rules:
   accounts:
     dns_name: "accounts.google.com."

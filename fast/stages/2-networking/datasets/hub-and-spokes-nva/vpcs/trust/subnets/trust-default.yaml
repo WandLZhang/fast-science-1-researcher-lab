@@ -1,0 +1,8 @@
+# skip boilerplate check
+
+# yaml-language-server: $schema=../../../../../schemas/subnet.schema.json
+
+name: trust-default
+region: $locations:primary
+ip_cidr_range: 10.75.2.0/24
+description: Default primary-region subnet for Palo Alto trust VPC

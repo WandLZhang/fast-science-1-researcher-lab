@@ -1,0 +1,19 @@
+# skip boilerplate check
+---
+# start of document (---) avoids errors if the file only contains comments
+
+# yaml-language-server: $schema=../../../../schemas/vpc.schema.json
+
+# Palo Alto NGFW trust (internal) VPC. The 0.0.0.0/0 default route on this
+# VPC is installed dynamically by paloalto-routes.tf when paloalto.enabled
+# = true (next-hop = N/S firewall ILB), so we do NOT declare a static
+# default here. Attached as an NCC center spoke so the trust VPC can
+# exchange routes with the management spoke.
+
+project_id: $project_ids:net-prod-0
+name: trust-0
+delete_default_routes_on_create: true
+mtu: 1500
+ncc_config:
+  hub: $ncc_hubs:hub
+  group: $ncc_groups:hub/center

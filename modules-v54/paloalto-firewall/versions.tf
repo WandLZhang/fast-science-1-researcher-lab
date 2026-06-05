@@ -12,24 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Fabric release: v38.0.0
+# Fabric release: v54.2.0 (provider constraints aligned with sibling
+# modules-v54/* to keep the 2-networking stage resolvable).
 
 terraform {
-  required_version = ">= 1.10.2"
+  required_version = ">= 1.12.2"
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = ">= 6.21.0, < 7.0.0" # tftest
+      version = ">= 7.17.0, < 8.0.0" # tftest
     }
     google-beta = {
       source  = "hashicorp/google-beta"
-      version = ">= 6.21.0, < 7.0.0" # tftest
+      version = ">= 7.17.0, < 8.0.0" # tftest
     }
   }
   provider_meta "google" {
-    module_name = "google-pso-tool/cloud-foundation-fabric/modules/paloalto-firewall:v38.0.0-tf"
+    module_name = "google-pso-tool/cloud-foundation-fabric/modules/paloalto-firewall:v54.2.0-tf"
   }
   provider_meta "google-beta" {
-    module_name = "google-pso-tool/cloud-foundation-fabric/modules/paloalto-firewall:v38.0.0-tf"
+    module_name = "google-pso-tool/cloud-foundation-fabric/modules/paloalto-firewall:v54.2.0-tf"
   }
 }

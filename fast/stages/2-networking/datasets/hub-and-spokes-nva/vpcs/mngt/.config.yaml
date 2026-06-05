@@ -1,0 +1,23 @@
+# skip boilerplate check
+---
+# start of document (---) avoids errors if the file only contains comments
+
+# yaml-language-server: $schema=../../../../schemas/vpc.schema.json
+
+# Palo Alto NGFW management VPC (created so that the
+# `paloalto.enabled = true` path on this dataset resolves correctly).
+# Attached as an NCC spoke in the `center` group of the STAR hub so it
+# inherits transit reachability to the trust/edge spokes when needed.
+
+project_id: $project_ids:net-prod-0
+name: mngt-0
+delete_default_routes_on_create: true
+mtu: 1500
+ncc_config:
+  hub: $ncc_hubs:hub
+  group: $ncc_groups:hub/center
+routes:
+  default:
+    dest_range: 0.0.0.0/0
+    next_hop_type: "gateway"
+    next_hop: "default-internet-gateway"

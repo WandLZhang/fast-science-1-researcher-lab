@@ -179,6 +179,13 @@ module "ilb" {
     } if v.nva_config == each.value.nva_config
   ]
   health_check_config = each.value.health_check
+  backend_service_config = {
+    session_affinity = "CLIENT_IP_NO_DESTINATION"
+    connection_tracking = {
+      track_per_session         = true
+      persist_conn_on_unhealthy = "NEVER_PERSIST"
+    }
+  }
   context = {
     project_ids = local.ctx_projects.project_ids
     networks    = local.ctx_vpcs.self_links
