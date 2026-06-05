@@ -86,7 +86,7 @@ resource "google_compute_ha_vpn_gateway" "default" {
 }
 
 module "vpn-ha" {
-  source             = "../../../modules/net-vpn-ha"
+  source             = "../../../modules-v54/net-vpn-ha"
   for_each           = local.vpns
   project_id         = each.value.project_id
   name               = replace(each.key, "/", "-")

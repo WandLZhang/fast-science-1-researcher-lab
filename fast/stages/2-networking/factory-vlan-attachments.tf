@@ -69,7 +69,7 @@ locals {
 }
 
 module "vlan-attachments" {
-  source   = "../../../modules/net-vlan-attachment"
+  source   = "../../../modules-v54/net-vlan-attachment"
   for_each = local.vlan_attachments
 
   admin_enabled                 = try(each.value.admin_enabled, true)

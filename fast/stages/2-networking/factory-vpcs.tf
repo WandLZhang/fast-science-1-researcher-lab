@@ -98,7 +98,7 @@ moved {
 }
 
 module "vpc-factory" {
-  source           = "../../../modules/net-vpc-factory"
+  source           = "../../../modules-v54/net-vpc-factory"
   factories_config = local.paths
   context = {
     project_ids = local.ctx_projects.project_ids
@@ -112,7 +112,7 @@ moved {
 }
 
 module "vpc-routes" {
-  source   = "../../../modules/net-vpc"
+  source   = "../../../modules-v54/net-vpc"
   for_each = local.vpcs
   vpc_reuse = {
     use_data_source = false

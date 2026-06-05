@@ -113,7 +113,7 @@ locals {
 
 module "nva-instance" {
   for_each       = local.nva_instances
-  source         = "../../../modules/compute-vm"
+  source         = "../../../modules-v54/compute-vm"
   project_id     = each.value.project_id
   name           = "nva-${each.key}"
   zone           = each.value.zone
@@ -167,7 +167,7 @@ resource "google_compute_instance_group" "nva" {
 }
 
 module "ilb" {
-  source     = "../../../modules/net-lb-int"
+  source     = "../../../modules-v54/net-lb-int"
   for_each   = local.nva_ilbs
   project_id = each.value.project_id
   region     = each.value.region

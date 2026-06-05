@@ -123,7 +123,7 @@ locals {
 }
 
 module "dns-zones" {
-  source        = "../../../modules/dns"
+  source        = "../../../modules-v54/dns"
   for_each      = local.dns_zones
   project_id    = each.value.project_id
   name          = each.value.name
@@ -140,7 +140,7 @@ module "dns-zones" {
 }
 
 module "dns-delegations" {
-  source     = "../../../modules/dns"
+  source     = "../../../modules-v54/dns"
   for_each   = local.dns_delegation_recordsets
   project_id = local.dns_zones[each.key].project_id
   name       = replace(each.key, "/", "-")
@@ -153,7 +153,7 @@ module "dns-delegations" {
 }
 
 module "dns-response-policies" {
-  source     = "../../../modules/dns-response-policy"
+  source     = "../../../modules-v54/dns-response-policy"
   for_each   = local.dns_response_policies
   project_id = each.value.project_id
   name       = each.value.name

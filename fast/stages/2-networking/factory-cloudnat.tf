@@ -41,7 +41,7 @@ locals {
 }
 
 module "nat" {
-  source                    = "../../../modules/net-cloudnat"
+  source                    = "../../../modules-v54/net-cloudnat"
   for_each                  = local.nat_configs
   project_id                = each.value.project_id
   name                      = each.value.name

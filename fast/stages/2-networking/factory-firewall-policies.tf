@@ -36,7 +36,7 @@ locals {
 }
 
 module "firewall_policies" {
-  source        = "../../../modules/net-firewall-policy"
+  source        = "../../../modules-v54/net-firewall-policy"
   for_each      = local.firewall_policies
   attachments   = each.value.attachments
   name          = each.key

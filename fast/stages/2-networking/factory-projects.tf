@@ -31,7 +31,7 @@ moved {
 }
 
 module "projects" {
-  source        = "../../../modules/project-factory"
+  source        = "../../../modules-v54/project-factory"
   data_defaults = local.project_defaults.defaults
   data_overrides = merge(
     {
