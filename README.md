@@ -1,12 +1,12 @@
 # Fast Science L1 — Researcher Labs
 
-A fork of [Stellar Engine](https://github.com/gcp-stellar-engine/stellar-engine) that provisions researcher projects on top of an [L0 foundation](https://github.com/WandLZhang/fast-science-0-stellar-engine). This repo helps IT administration create department folders and base projects. The researcher can then deploy a workload from the L2 catalog.
+A fork of [Stellar Engine](https://github.com/google/stellar-engine) that provisions researcher projects on top of an [L0 foundation](https://github.com/WandLZhang/fast-science-0-stellar-engine). This repo helps IT administration create department folders and base projects. The researcher can then deploy a workload from the L2 catalog.
 
 ## Architecture
 
 ```mermaid
 graph TB
-    subgraph L0["L0 — stellar-engine"]
+    subgraph L0["L0 — landing zone"]
         direction TB
         S0["Stage 0: Org, IAM, Policies"]
         S1["Stage 1: Folders, SAs"]
@@ -103,7 +103,7 @@ graph TB
 ---
 
 
-L1 uses Stellar Engine's [Project Factory](modules/project-factory/) to create researcher projects from YAML files. Each YAML file = one project. The filename controls the project name.
+L1 uses the [Project Factory](modules/project-factory/) module to create researcher projects from YAML files. Each YAML file = one project. The filename controls the project name.
 
 Each researcher project gets:
 - A GCP project with a meaningful name (e.g., `univ-pathology-modeltuning`)
@@ -112,7 +112,7 @@ Each researcher project gets:
 - Service account for the researcher's pipeline
 - Budget alerts
 
-> **Note:** All steps below are run from this repo (L1). Since L0 and L1 are both forks of Stellar Engine with the same code, modules, and shared Terraform state (GCS), you can also follow these steps from the [L0 repo](https://github.com/WandLZhang/fast-science-0-stellar-engine) if you prefer.
+> **Note:** All steps below are run from this repo (L1). Since L0 and L1 are both forks of the same upstream with the same code, modules, and shared Terraform state (GCS), you can also follow these steps from the [L0 repo](https://github.com/WandLZhang/fast-science-0-stellar-engine) if you prefer.
 
 ### Step 1 — Enable project factory (one-time prerequisite)
 
@@ -200,7 +200,7 @@ labels:
   cost-center: "1234"
 
 services:
-  # Stellar Engine standard (from tenant project defaults)
+  # Upstream standard (from tenant project defaults)
   - accesscontextmanager.googleapis.com
   - bigquery.googleapis.com
   - bigqueryreservation.googleapis.com
@@ -527,12 +527,12 @@ These are not in the artifacts because they depend on institutional context — 
 
 ## What You Touch vs What You Don't
 
-Same principle as L0 — minimize changes to Stellar Engine golden artifacts:
+Same principle as L0 — minimize changes to upstream golden artifacts:
 
 | ✅ Edit | 🚫 Don't Edit |
 |---------|---------------|
 | `terraform.tfvars` — tenant definitions | `*.tf` — stage logic |
-| `data/*.yaml` — if using project factory | `modules/*` — Stellar Engine modules |
+| `data/*.yaml` — if using project factory | `modules/*` — upstream modules |
 | `blueprints/research-delegation/team-folders/*.tfvars` — your dept list | `fast/stages-aw/1-resman/branch-teams.tf` — folder/SA wiring |
 | `blueprints/research-delegation/org-policies/*.yaml` — baseline policies | `modules/folder/`, `modules/organization/` — policy plumbing |
 | `blueprints/research-delegation/project-templates/*.yaml.sample` — copy + fill in per project | `modules/project/` — lien + org-policy plumbing |
@@ -540,13 +540,21 @@ Same principle as L0 — minimize changes to Stellar Engine golden artifacts:
 
 ## Upstream Sync
 
-This repo tracks [Stellar Engine](https://github.com/gcp-stellar-engine/stellar-engine) upstream:
+This repo tracks [google/stellar-engine](https://github.com/google/stellar-engine). Sync to a release tag, not `main` — releases carry migration notes.
 
 ```bash
-git fetch upstream
-git merge upstream/main
-# Conflicts only in README.md (the only file we changed)
+git remote add upstream https://github.com/google/stellar-engine.git
+git fetch upstream --tags
+git merge v4.0.0
 ```
+
+Three places conflict:
+
+- `fast/stages-aw/1-resman/` — L1 deleted `branch-envs.tf`, `branch-tenants.tf`, `kms.tf`, `log-metric-alerts.tf` and `outputs-tenants.tf` when department folders moved to the org root. Upstream still develops them. Keep them deleted.
+- `blueprints/research-delegation/` — local only.
+- `modules-v54/` and `fast/stages/2-networking/` — local only, vendored CFF v54.2.0.
+
+Minor versions tag on the last Friday of each month.
 
 ## Related Repos
 
