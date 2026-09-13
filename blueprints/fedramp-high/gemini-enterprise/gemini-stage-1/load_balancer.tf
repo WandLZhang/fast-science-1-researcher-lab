@@ -58,6 +58,9 @@ data "google_compute_address" "gemini_enterprise_ip" {
 
 locals {
   load_balancing_scheme = data.terraform_remote_state.stage_0.outputs.deployment_type == "internal" ? "INTERNAL_MANAGED" : "EXTERNAL_MANAGED"
+
+  gemini_apps_widget_ids = data.terraform_remote_state.stage_0.outputs.gemini_apps_widget_ids
+  first_gemini_widget_id = length(local.gemini_apps_widget_ids) > 0 ? local.gemini_apps_widget_ids[keys(local.gemini_apps_widget_ids)[0]] : ""
 }
 
 # This resource defines the URL map with the specified routing rules.
@@ -75,13 +78,31 @@ resource "google_compute_region_url_map" "gemini_enterprise_load_balancer" {
   }
 
   dynamic "path_matcher" {
-    for_each = data.terraform_remote_state.stage_0.outputs.acl_idp_type == "GSUITE" ? ["gsuite"] : []
+    for_each = contains(["GSUITE", "GOOGLE_CLOUD_IDENTITY"], data.terraform_remote_state.stage_0.outputs.acl_idp_type) ? ["gsuite"] : []
     content {
       name            = "path-matcher-1"
       default_service = data.google_compute_region_backend_service.gemini_enterprise_backend[0].id
 
+      dynamic "route_rules" {
+        for_each = keys(data.terraform_remote_state.stage_0.outputs.gemini_apps_widget_ids)
+        content {
+          priority = 100 + route_rules.key
+          match_rules {
+            prefix_match = "/${route_rules.value}"
+          }
+          service = data.google_compute_region_backend_service.gemini_enterprise_backend[0].id
+          route_action {
+            url_rewrite {
+              host_rewrite        = "vertexaisearch.cloud.google.com"
+              path_prefix_rewrite = "/us/home/cid/${data.terraform_remote_state.stage_0.outputs.gemini_apps_widget_ids[route_rules.value]}?hl=en_US"
+            }
+          }
+        }
+      }
+
+      # Default route to first app
       route_rules {
-        priority = 100
+        priority = 999
         match_rules {
           prefix_match = "/"
         }
@@ -89,7 +110,7 @@ resource "google_compute_region_url_map" "gemini_enterprise_load_balancer" {
         route_action {
           url_rewrite {
             host_rewrite        = "vertexaisearch.cloud.google.com"
-            path_prefix_rewrite = "/us/home/cid/${var.gemini_config_id}?hl=en_US"
+            path_prefix_rewrite = "/us/home/cid/${local.first_gemini_widget_id}?hl=en_US"
           }
         }
       }
@@ -100,10 +121,29 @@ resource "google_compute_region_url_map" "gemini_enterprise_load_balancer" {
     for_each = data.terraform_remote_state.stage_0.outputs.acl_idp_type == "THIRD_PARTY" ? ["third_party"] : []
     content {
       name = "path-matcher-1"
+
+      dynamic "route_rules" {
+        for_each = keys(data.terraform_remote_state.stage_0.outputs.gemini_apps_widget_ids)
+        content {
+          priority = 200 + route_rules.key
+          match_rules {
+            prefix_match = "/${route_rules.value}"
+          }
+          url_redirect {
+            host_redirect          = "auth.cloud.google"
+            path_redirect          = "/signin/${data.terraform_remote_state.stage_0.outputs.acl_workforce_pool_name}/providers/${data.terraform_remote_state.stage_0.outputs.acl_workforce_provider_id}?continueUrl=https%3A%2F%2Fvertexaisearch.cloud.google%2Fus%2Fhome%2Fcid%2F${data.terraform_remote_state.stage_0.outputs.gemini_apps_widget_ids[route_rules.value]}&hl=en_US"
+            redirect_response_code = "FOUND"
+            strip_query            = false
+            https_redirect         = true
+          }
+        }
+      }
+
+      # Fallback redirect to first app
       default_url_redirect {
         https_redirect         = true
         host_redirect          = "auth.cloud.google"
-        path_redirect          = "/signin/${data.terraform_remote_state.stage_0.outputs.acl_workforce_pool_name}/providers/${data.terraform_remote_state.stage_0.outputs.acl_workforce_provider_id}?continueUrl=https%3A%2F%2Fvertexaisearch.cloud.google%2Fus%2Fhome%2Fcid%2F${var.gemini_config_id}&hl=en_US"
+        path_redirect          = "/signin/${data.terraform_remote_state.stage_0.outputs.acl_workforce_pool_name}/providers/${data.terraform_remote_state.stage_0.outputs.acl_workforce_provider_id}?continueUrl=https%3A%2F%2Fvertexaisearch.cloud.google%2Fus%2Fhome%2Fcid%2F${local.first_gemini_widget_id}&hl=en_US"
         redirect_response_code = "FOUND"
         strip_query            = false
       }
@@ -134,8 +174,8 @@ resource "google_compute_region_target_https_proxy" "gemini_enterprise_https_pro
   region           = data.terraform_remote_state.stage_0.outputs.region
   url_map          = google_compute_region_url_map.gemini_enterprise_load_balancer[0].id
   
-  ssl_certificates = var.cert_management_choice == "self_managed" ? [data.google_compute_region_ssl_certificate.gemini_enterprise_cert[0].self_link] : []
-  certificate_manager_certificates = var.cert_management_choice == "google_managed" ? [google_certificate_manager_certificate.gemini_enterprise_managed_cert[0].id] : []
+  ssl_certificates = var.cert_management_choice == "self_managed" ? [data.google_compute_region_ssl_certificate.gemini_enterprise_cert[0].self_link] : null
+  certificate_manager_certificates = var.cert_management_choice == "google_managed" ? [google_certificate_manager_certificate.gemini_enterprise_managed_cert[0].id] : null
 }
 
 # This resource creates the forwarding rule for the load balancer.
@@ -153,12 +193,16 @@ resource "google_compute_forwarding_rule" "gemini_enterprise_forwarding_rule" {
   target                = google_compute_region_target_https_proxy.gemini_enterprise_https_proxy[0].id
 }
 
-# Data source to get the subnet created in stage-0
+# Data source to get the subnet created in stage-0 or Shared VPC
 data "google_compute_subnetwork" "gemini_enterprise_vpc_subnet" {
   count   = data.terraform_remote_state.stage_0.outputs.deployment_type == "internal" ? 1 : 0
-  project = data.terraform_remote_state.stage_0.outputs.main_project_id
-  name    = "gemini-enterprise-vpc-subnet"
-  region  = data.terraform_remote_state.stage_0.outputs.region
+  project = var.host_project_id != "" ? var.host_project_id : (
+    try(data.terraform_remote_state.stage_0.outputs.use_shared_vpc, false) ? data.terraform_remote_state.stage_0.outputs.network_project_id : data.terraform_remote_state.stage_0.outputs.main_project_id
+  )
+  name = var.subnet_name != "" ? var.subnet_name : (
+    try(data.terraform_remote_state.stage_0.outputs.use_shared_vpc, false) ? data.terraform_remote_state.stage_0.outputs.shared_vpc_subnet_name : "${data.terraform_remote_state.stage_0.outputs.prefix}-vpc-subnet"
+  )
+  region = data.terraform_remote_state.stage_0.outputs.region
 }
 
 # --- IAP Access Roles ---

@@ -39,11 +39,6 @@ variable "cert_management_choice" {
   }
 }
 
-variable "gemini_config_id" {
-  description = "ID for your Gemini Enterprise instance after running Gem4Gov CLI"
-  type        = string
-}
-
 variable "network_name" {
   description = "The name of the VPC network."
   type        = string
@@ -55,3 +50,10 @@ variable "host_project_id" {
   type        = string
   default     = ""
 }
+
+variable "subnet_name" {
+  description = "The name of the subnetwork for internal load balancer deployments. If empty, falls back to stage 0 outputs or default."
+  type        = string
+  default     = ""
+}
+

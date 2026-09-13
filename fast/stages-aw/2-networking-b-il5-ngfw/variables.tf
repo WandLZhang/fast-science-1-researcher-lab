@@ -13,9 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 variable "alert_email" {
   description = "Email to receive log alerts."
   type        = string
+}
+
+variable "assured_workloads" {
+  description = "Assured Workloads configuration."
+  type        = any
+  default     = null
 }
 
 variable "automation" {
@@ -39,12 +46,48 @@ variable "billing_account" {
   }
 }
 
+variable "billing_override" {
+  description = "Optional billing override configuration. If set, disables service account impersonation for project billing linkage and runs under the user account using the specified quota projects."
+  type = object({
+    project         = string
+    billing_project = string
+  })
+  default = null
+}
+
+variable "cidrs" {
+  description = "Named CIDR ranges to use in firewall rules."
+  type        = map(list(string))
+  default     = {}
+  nullable    = false
+}
+
+variable "common_services_folder" {
+  description = "Common services folder ID."
+  type        = string
+  default     = null
+}
+
 variable "dns" {
   description = "DNS configuration."
   type = object({
     enable_logging = optional(bool, true)
     resolvers      = optional(list(string), [])
   })
+  default  = {}
+  nullable = false
+}
+
+variable "dns_policy_rules" {
+  description = "DNS response policy rules in name => rule format."
+  type = map(object({
+    dns_name = string
+    behavior = optional(string, "bypassResponsePolicy")
+    local_data = optional(map(object({
+      ttl     = optional(number)
+      rrdatas = optional(list(string), [])
+    })), {})
+  }))
   default  = {}
   nullable = false
 }
@@ -83,6 +126,43 @@ variable "factories_config" {
   }
 }
 
+variable "fast_features" {
+  description = "FAST features enabled."
+  type        = any
+  default     = null
+}
+
+variable "firewall_rules" {
+  description = "Firewall rules for each VPC / environment spoke."
+  type = map(object({
+    ingress = optional(map(object({
+      description          = optional(string)
+      deny                 = optional(bool, false)
+      source_ranges        = optional(list(string))
+      sources              = optional(list(string))
+      targets              = optional(list(string))
+      use_service_accounts = optional(bool, false)
+      rules = optional(list(object({
+        protocol = string
+        ports    = optional(list(string))
+      })))
+    })), {})
+    egress = optional(map(object({
+      description          = optional(string)
+      deny                 = optional(bool, true)
+      destination_ranges   = optional(list(string))
+      targets              = optional(list(string))
+      use_service_accounts = optional(bool, false)
+      rules = optional(list(object({
+        protocol = string
+        ports    = optional(list(string))
+      })))
+    })), {})
+  }))
+  default  = {}
+  nullable = false
+}
+
 variable "folder_ids" {
   # tfdoc:variable:source 1-resman
   description = "Folders to be used for the networking resources in folders/nnnnnnnnnnn format. If null, folder will be created."
@@ -90,6 +170,24 @@ variable "folder_ids" {
     networking = string
     envs       = optional(map(string))
   })
+}
+
+variable "force_destroy" {
+  description = "Toggles force_destroy for GCS buckets."
+  type        = bool
+  default     = false
+}
+
+variable "groups" {
+  description = "IAM groups mapping."
+  type        = any
+  default     = null
+}
+
+variable "logging" {
+  description = "Logging configuration."
+  type        = any
+  default     = null
 }
 
 variable "organization" {
@@ -119,6 +217,13 @@ variable "prefix" {
   }
 }
 
+variable "proxy_subnets" {
+  description = "VPC proxy-only subnet CIDRs keyed by environment."
+  type        = map(string)
+  default     = {}
+  nullable    = false
+}
+
 variable "psa_ranges" {
   description = "IP ranges used for Private Service Access (e.g. CloudSQL). Ranges is in name => range format."
   type = object({
@@ -137,6 +242,12 @@ variable "psa_ranges" {
   })
   nullable = false
   default  = {}
+}
+
+variable "regime_mapping" {
+  description = "Compliance regime shorthand mapping."
+  type        = any
+  default     = null
 }
 
 variable "regions" {
@@ -159,6 +270,30 @@ variable "service_accounts" {
     project-factory-prod = string
   })
   default = null
+}
+
+variable "subnets" {
+  description = "VPC subnet configurations keyed by network name."
+  type = map(list(object({
+    name                             = string
+    ip_cidr_range                    = string
+    region                           = string
+    description                      = optional(string)
+    enable_private_access            = optional(bool, true)
+    allow_subnet_cidr_routes_overlap = optional(bool)
+    flow_logs_config = optional(object({
+      aggregation_interval = optional(string)
+      filter_expression    = optional(string)
+      flow_sampling        = optional(number)
+      metadata             = optional(string)
+      metadata_fields      = optional(list(string))
+    }))
+    secondary_ip_ranges = optional(map(string))
+    iam                 = optional(map(list(string)), {})
+    tenant              = optional(string)
+  })))
+  default  = {}
+  nullable = false
 }
 
 variable "tenant_accounts" {

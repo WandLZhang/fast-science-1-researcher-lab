@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 variable "alert_email" {
   description = "Email to receive log alerts."
   type        = string
@@ -39,6 +40,24 @@ variable "billing_account" {
     no_iam       = optional(bool, false)
   })
   nullable = false
+}
+
+variable "billing_budget_amount" {
+  description = "Optional Budget configuration for the AW folder. Includes amount and optional threshold rules (defaults to 0.5, 0.75, 0.9). If null, no budget will be created."
+  type = object({
+    amount          = number
+    threshold_rules = optional(list(number), [0.5, 0.75, 0.9])
+  })
+  default = null
+}
+
+variable "billing_override" {
+  description = "Optional billing override configuration. If set, disables service account impersonation for project billing linkage and runs under the user account using the specified quota projects."
+  type = object({
+    project         = string
+    billing_project = string
+  })
+  default = null
 }
 
 variable "bootstrap_project" {
@@ -138,6 +157,29 @@ variable "fast_features" {
   nullable = false
 }
 
+variable "federated_identity_providers" {
+  description = "Workload Identity Federation providers."
+  type = map(object({
+    attribute_condition = optional(string)
+    issuer              = string
+    custom_settings = optional(object({
+      issuer_uri = optional(string)
+      audiences  = optional(list(string), [])
+      jwks_json  = optional(string)
+    }), {})
+    attribute_mapping = optional(map(string))
+    audiences         = optional(list(string))
+  }))
+  default  = {}
+  nullable = false
+}
+
+variable "force_destroy" {
+  description = "Toggles force_destroy for GCS buckets."
+  type        = bool
+  default     = false
+}
+
 variable "groups" {
   # https://cloud.google.com/docs/enterprise/setup-checklist
   description = "Group names or IAM-format principals to grant organization-level permissions. If just the name is provided, the 'group:' principal and organization domain are interpolated."
@@ -183,6 +225,12 @@ variable "iam_by_principals" {
   nullable    = false
 }
 
+variable "kms_protection_level" {
+  description = "KMS protection level."
+  type        = string
+  nullable    = true
+}
+
 variable "locations" {
   description = "Optional locations for GCS, BigQuery, and logging buckets created here."
   type = object({
@@ -200,12 +248,13 @@ variable "locations" {
 # for additional logging filter examples
 
 variable "log_sinks" {
-  description = "Org-level log sinks, in name => {type, filter} format."
+  description = "Org-level log sinks, in name => {type, filter} format. Valid types: 'logging' (routes to Cloud Logging bucket with 365-day default retention), 'pubsub' (routes to Pub/Sub topic with 7-day default retention; requires an active consumer to avoid log loss), 'storage' (routes to GCS bucket), 'bigquery' (routes to BigQuery dataset)."
   type = map(object({
     filter = string
     type   = string
   }))
   default = {
+
     audit-logs = {
       filter = "logName:\"/logs/cloudaudit.googleapis.com%2Factivity\" OR logName:\"/logs/cloudaudit.googleapis.com%2Fsystem_event\" OR protoPayload.metadata.@type=\"type.googleapis.com/google.cloud.audit.TransparencyLog\""
       type   = "logging"
@@ -232,6 +281,12 @@ variable "log_sinks" {
     ])
     error_message = "Type must be one of 'bigquery', 'logging', 'pubsub', 'storage'."
   }
+}
+
+variable "logging_bucket_retention" {
+  description = "Retention period (in days) for the Cloud Logging buckets created for organization log exports."
+  type        = number
+  default     = 365
 }
 
 variable "logging_kms_key" {
@@ -273,7 +328,7 @@ variable "outputs_location" {
 }
 
 variable "prefix" {
-  description = "Prefix used for resources that need unique names. Use 9 characters or less."
+  description = "Prefix used for resources that need unique names. Use 7 characters or less."
   type        = string
   validation {
     condition     = try(length(var.prefix), 0) <= 7
@@ -289,14 +344,6 @@ variable "project_parent_ids" {
     logging    = optional(string)
   })
   default  = {}
-  nullable = false
-}
-
-variable "regions" {
-  description = "Region definitions. Must be specified in terraform.tfvars. Example: us-east4 for FedRAMP High compliance."
-  type = object({
-    primary = string
-  })
   nullable = false
 }
 
@@ -333,24 +380,15 @@ variable "regime_mapping" {
   }
 }
 
-
-
-
-variable "federated_identity_providers" {
-  description = "Workload Identity Federation providers."
-  type = map(object({
-    attribute_condition = optional(string)
-    issuer              = string
-    custom_settings = optional(object({
-      issuer_uri = optional(string)
-      audiences  = optional(list(string), [])
-      jwks_json  = optional(string)
-    }), {})
-    attribute_mapping = optional(map(string))
-    audiences         = optional(list(string))
-  }))
-  default  = {}
+variable "regions" {
+  description = "Region definitions. Must be specified in terraform.tfvars. Example: us-east4 for FedRAMP High compliance."
+  type = object({
+    primary = string
+  })
   nullable = false
+  default = {
+    primary = "us-east4"
+  }
 }
 
 variable "workforce_identity_pool" {

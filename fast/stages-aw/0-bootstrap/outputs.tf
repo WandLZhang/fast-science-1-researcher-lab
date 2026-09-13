@@ -44,28 +44,32 @@ locals {
   }
   providers = {
     "0-bootstrap" = templatefile(local._tpl_providers, {
-      backend_extra = null
-      bucket        = module.automation-tf-bootstrap-gcs.name
-      name          = "bootstrap"
-      sa            = module.automation-tf-bootstrap-sa.email
+      backend_extra     = null
+      bucket            = module.automation-tf-bootstrap-gcs.name
+      name              = "bootstrap"
+      sa                = module.automation-tf-bootstrap-sa.email
+      bootstrap_project = var.bootstrap_project
     })
     "0-bootstrap-r" = templatefile(local._tpl_providers, {
-      backend_extra = null
-      bucket        = module.automation-tf-bootstrap-gcs.name
-      name          = "bootstrap"
-      sa            = module.automation-tf-bootstrap-r-sa.email
+      backend_extra     = null
+      bucket            = module.automation-tf-bootstrap-gcs.name
+      name              = "bootstrap"
+      sa                = module.automation-tf-bootstrap-r-sa.email
+      bootstrap_project = var.bootstrap_project
     })
     "1-resman" = templatefile(local._tpl_providers, {
-      backend_extra = null
-      bucket        = module.automation-tf-resman-gcs.name
-      name          = "resman"
-      sa            = module.automation-tf-resman-sa.email
+      backend_extra     = null
+      bucket            = module.automation-tf-resman-gcs.name
+      name              = "resman"
+      sa                = module.automation-tf-resman-sa.email
+      bootstrap_project = var.bootstrap_project
     })
     "1-resman-r" = templatefile(local._tpl_providers, {
-      backend_extra = null
-      bucket        = module.automation-tf-resman-gcs.name
-      name          = "resman"
-      sa            = module.automation-tf-resman-r-sa.email
+      backend_extra     = null
+      bucket            = module.automation-tf-resman-gcs.name
+      name              = "resman"
+      sa                = module.automation-tf-resman-r-sa.email
+      bootstrap_project = var.bootstrap_project
     })
     "0-bootstrap-tenant" = templatefile(local._tpl_providers, {
       backend_extra = join("\n", [
@@ -73,9 +77,10 @@ locals {
         "prefix = \"",
         "\""
       ])
-      bucket = module.automation-tf-resman-gcs.name
-      name   = "bootstrap-tenant"
-      sa     = module.automation-tf-resman-sa.email
+      bucket            = module.automation-tf-resman-gcs.name
+      name              = "bootstrap-tenant"
+      sa                = module.automation-tf-resman-sa.email
+      bootstrap_project = var.bootstrap_project
     })
   }
   tfvars = {
@@ -101,7 +106,7 @@ locals {
       project_number    = module.log-export-project.number
       writer_identities = module.organization.sink_writer_identities
     }
-    assured_workloads      = merge(var.assured_workloads, { "folder" = var.assured_workloads.regime != "COMPLIANCE_REGIME_UNSPECIFIED" ? "folders/${google_assured_workloads_workload.primary[0].resources[0].resource_id}" : "${module.no-compliance-folder[0].folder.id}" })
+    assured_workloads      = merge(var.assured_workloads, { "folder" = local.assured_workload_folder })
     common_services_folder = module.branch-common-services-folder.folder.name
     regions                = var.regions
   }
@@ -123,7 +128,7 @@ output "alert_email" {
 
 output "assured_workload" {
   description = "Assured Workload folder for the deployment."
-  value       = var.assured_workloads.regime != "COMPLIANCE_REGIME_UNSPECIFIED" ? "folders/${google_assured_workloads_workload.primary[0].resources[0].resource_id}" : "folders/${module.no-compliance-folder[0].folder.id}"
+  value       = local.assured_workload_folder
 }
 
 output "automation" {
@@ -156,6 +161,11 @@ output "common_services_folder" {
 output "custom_roles" {
   description = "Organization-level custom roles."
   value       = module.organization.custom_role_id
+}
+
+output "kms_protection_level" {
+  description = "KMS protection level."
+  value       = var.kms_protection_level
 }
 
 output "outputs_bucket" {

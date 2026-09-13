@@ -25,6 +25,9 @@ locals {
       for k, v in google_compute_network_endpoint_group.default : k => v.id
     },
     {
+      for k, v in google_compute_region_network_endpoint_group.internet : k => v.id
+    },
+    {
       for k, v in google_compute_region_network_endpoint_group.psc : k => v.id
     },
     {
@@ -185,6 +188,29 @@ resource "google_compute_region_backend_service" "default" {
               nanos   = ttl.value.nanos
             }
           }
+        }
+      }
+    }
+  }
+
+  dynamic "strong_session_affinity_cookie" {
+    for_each = (
+      each.value.strong_session_affinity_cookie == null
+      ? []
+      : [each.value.strong_session_affinity_cookie]
+    )
+    content {
+      name = strong_session_affinity_cookie.value.name
+      path = strong_session_affinity_cookie.value.path
+      dynamic "ttl" {
+        for_each = (
+          strong_session_affinity_cookie.value.ttl == null
+          ? []
+          : [strong_session_affinity_cookie.value.ttl]
+        )
+        content {
+          seconds = ttl.value.seconds
+          nanos   = ttl.value.nanos
         }
       }
     }

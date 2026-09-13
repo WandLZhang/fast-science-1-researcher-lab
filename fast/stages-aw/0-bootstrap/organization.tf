@@ -115,6 +115,7 @@ locals {
         customer_id : var.organization.customer_id
         drs_tag_name : local.drs_tag_name
         allowed_domains : var.org_policies_config.constraints.allowed_policy_member_domains
+        regime : var.assured_workloads.regime
       }))
     ]
   )...)
@@ -134,7 +135,8 @@ locals {
             all    = try(r.deny.all, null)
             values = try(r.deny.values, null)
           } : null
-          enforce = try(r.enforce, null)
+          enforce    = try(r.enforce, null)
+          parameters = try(jsonencode(r.parameters), null)
           condition = {
             description = try(r.condition.description, null)
             expression  = try(r.condition.expression, null)
@@ -211,9 +213,21 @@ module "no-compliance-folder" {
   name   = "StellarEngine-${var.prefix}"
 }
 
+locals {
+  assured_workload_folder = var.assured_workloads.regime != "COMPLIANCE_REGIME_UNSPECIFIED" ? (
+    try(
+      format("folders/%s", one([
+        for r in google_assured_workloads_workload.primary[0].resources :
+        r.resource_id if r.resource_type == "CONSUMER_FOLDER"
+      ])),
+      "folders/${google_assured_workloads_workload.primary[0].resources[0].resource_id}"
+    )
+  ) : try(module.no-compliance-folder[0].folder.id, null)
+}
+
 module "branch-common-services-folder" {
   source = "../../../modules/folder"
-  parent = var.assured_workloads.regime != "COMPLIANCE_REGIME_UNSPECIFIED" ? "folders/${google_assured_workloads_workload.primary[0].resources[0].resource_id}" : "${module.no-compliance-folder[0].folder.id}"
+  parent = local.assured_workload_folder
   name   = "${lookup(var.regime_mapping, var.assured_workloads.regime, var.assured_workloads.regime)} Common Services"
 }
 
@@ -222,10 +236,12 @@ module "organization" {
   source          = "../../../modules/organization-se"
   organization_id = module.organization-logging.id
   prefix          = var.prefix
-  # human (groups) IAM bindings
   iam_by_principals = {
-    for k, v in local.iam_principals :
-    k => distinct(concat(v, lookup(var.iam_by_principals, k, [])))
+    for k in distinct(concat(keys(local.iam_principals), keys(var.iam_by_principals))) :
+    k => distinct(concat(
+      try(local.iam_principals[k], []),
+      try(var.iam_by_principals[k], [])
+    ))
   }
   # machine (service accounts) IAM bindings
   iam = merge(

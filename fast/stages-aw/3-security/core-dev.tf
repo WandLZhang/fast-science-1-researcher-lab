@@ -25,7 +25,11 @@ locals {
 }
 
 module "dev-sec-project" {
-  source          = "../../../modules/project"
+  source = "../../../modules/project"
+  providers = {
+    google      = google.billing
+    google-beta = google-beta.billing
+  }
   name            = "dev-sec-core-0"
   parent          = var.folder_ids.security
   prefix          = var.prefix
@@ -50,10 +54,6 @@ module "dev-sec-kms" {
   keyring = {
     location = each.key
     name     = "dev-${each.key}"
-    version_template = {
-      algorithm        = "GOOGLE_SYMMETRIC_ENCRYPTION"
-      protection_level = "HSM"
-    }
   }
   keys = local.kms_locations_keys[each.key]
 }

@@ -18,7 +18,7 @@ The diagram shows the high-level design and it should be used as a reference thr
 The final number of subnets, and their IP addressing will depend on the user-specific requirements. It can be easily changed via variables or external data files, without any need to edit the code.
 
 <p align="center">
-  <img src="diagram.svg" alt="Networking diagram">
+  <img src="images/Stellar-Engine-Network-IL-5.png" alt="Networking diagram">
 </p>
 
 # Table of Contents
@@ -102,10 +102,10 @@ Internal connectivity (e.g. between the landing landing VPC and the spokes) is r
 
 This is an options summary
 
-- [VPC Peering](https://cloud.google.com/vpc/docs/vpc-peering) (used here to connect the landing landing VPC with the spokes, also used by [02-networking-vpn](../2-networking-b-vpn/))
+- [VPC Peering](https://cloud.google.com/vpc/docs/vpc-peering) (used here to connect the landing landing VPC with the spokes)
   - Pros: no additional costs, full bandwidth with no configurations, no extra latency
   - Cons: no transitivity (e.g. to GKE masters, Cloud SQL, etc.), no selective exchange of routes, several quotas and limits shared between VPCs in a peering group
-- [Multi-NIC appliances](https://cloud.google.com/architecture/best-practices-vpc-design#multi-nic) (used here to connect the landing landing and dmz VPCs) and multi-NIC appliances with NCC/BGP support implemented [here](../2-networking-e-nva-bgp/)
+- [Multi-NIC appliances](https://cloud.google.com/architecture/best-practices-vpc-design#multi-nic) (used here to connect the landing landing and dmz VPCs) and multi-NIC appliances with NCC/BGP support implemented here
   - Pros: provides additional security features (e.g. IPS), potentially better integration with on-prem systems by using the same vendor
   - Cons: complex HA/failover setup, limited by VM bandwidth and scale, additional costs for VMs and licenses, out of band management of a critical cloud component
 
@@ -202,12 +202,12 @@ VPCs are defined in separate files, one for `landing` (landing and dmz), one for
 These files contain different resources:
 
 - **project** ([`projects`](../../../modules/project)): the "[host Google Cloud Project](https://cloud.google.com/vpc/docs/shared-vpc)" containing the VPCs and enabling the required APIs.
-- **VPCs** ([`net-vpc`](../../../modules/net-vpc)): manages the subnets, the explicit routes for `{private,restricted}.googleapis.com` and the DNS inbound policy for the landing landing VPC. Non-infrastructural subnets are created leveraging resource factories. Sample subnets are shipped in [data/subnets](./data/subnets) and can be easily customized to fit users' needs. [PSA](https://cloud.google.com/vpc/docs/configure-private-services-access#allocating-range) are configured by the variable `psa_ranges` if managed services are needed.
+- **VPCs** ([`net-vpc`](../../../modules/net-vpc)): manages the subnets, the explicit routes for `{private,restricted}.googleapis.com` and the DNS inbound policy for the landing landing VPC. Non-infrastructural subnets are created leveraging resource factories. Sample subnets are shipped in data/subnets and can be easily customized to fit users' needs. [PSA](https://cloud.google.com/vpc/docs/configure-private-services-access#allocating-range) are configured by the variable `psa_ranges` if managed services are needed.
 - **Cloud NAT** ([`net-cloudnat`](../../../modules/net-cloudnat)) (in the dmz landing VPC only): it manages the networking infrastructure required to enable the Internet egress.
 
 ### VPNs
 
-The connectivity between on-premises and GCP (the landing landing VPC) is implemented with Cloud HA VPN ([`net-vpn`](../../../modules/net-vpn-ha)) and defined in [`vpn-onprem.tf`](./vpn-onprem.tf). The file implements a single logical connection between on-premises and the landing landing VPC, both in `us-east4` and `us-central1`. The relevant parameters for its configuration are found in the variables `vpn_onprem_primary_config` and `vpn_onprem_secondary_config`.
+The connectivity between on-premises and GCP (the landing landing VPC) is implemented with Cloud HA VPN ([`net-vpn`](../../../modules/net-vpn-ha)) and defined in `vpn-onprem.tf`. The file implements a single logical connection between on-premises and the landing landing VPC, both in `us-east4` and `us-central1`. The relevant parameters for its configuration are found in the variables `vpn_onprem_primary_config` and `vpn_onprem_secondary_config`.
 
 ### Routing and BGP
 
@@ -220,9 +220,9 @@ BGP sessions for landing landing to on-premises are configured through the varia
 ### Firewall
 
 **VPC firewall rules** ([`net-vpc-firewall`](../../../modules/net-vpc-firewall)) are defined per-vpc on each `vpc-*.tf` file and leverage a resource factory to massively create rules.
-To add a new firewall rule, create a new file or edit an existing one in the `data_folder` directory defined in the module `net-vpc-firewall`, following the examples of the "[Rules factory](../../../modules/net-vpc-firewall#rules-factory)" section of the module documentation. Sample firewall rules are shipped in [data/firewall-rules/dmz](./data/firewall-rules/dmz) and in [data/firewall-rules/landing](./data/firewall-rules/landing), and can be easily customized.
+To add a new firewall rule, create a new file or edit an existing one in the `data_folder` directory defined in the module `net-vpc-firewall`, following the examples of the "[Rules factory](../../../modules/net-vpc-firewall#rules-factory)" section of the module documentation. Sample firewall rules are shipped in data/firewall-rules/dmz and in data/firewall-rules/landing, and can be easily customized.
 
-**Hierarchical firewall policies** ([`folder`](../../../modules/folder)) are defined in `main.tf` and managed through a policy factory implemented by the `net-firewall-policy` module, which is then applied to the `Networking` folder containing all the core networking infrastructure. Policies are defined in the `rules_file` file, to define a new one simply use the [firewall policy module documentation](../../../modules/net-firewall-policy/README.md#factory)". Sample hierarchical firewall rules are shipped in [data/hierarchical-ingress-rules.yaml](./data/hierarchical-ingress-rules.yaml) and can be easily customised.
+**Hierarchical firewall policies** ([`folder`](../../../modules/folder)) are defined in `main.tf` and managed through a policy factory implemented by the `net-firewall-policy` module, which is then applied to the `Networking` folder containing all the core networking infrastructure. Policies are defined in the `rules_file` file, to define a new one simply use the [firewall policy module documentation](../../../modules/net-firewall-policy/README.md#factory)". Sample hierarchical firewall rules are shipped in data/hierarchical-ingress-rules.yaml and can be easily customised.
 
 ### DNS architecture
 
@@ -388,22 +388,34 @@ If you are redeploying this stage with the same prefix, please run "pre-redeploy
 | [folder_ids](variables.tf#L86) | Folders to be used for the networking resources in folders/nnnnnnnnnnn format. If null, folder will be created. | <code title="object&#40;&#123;&#10;  networking &#61; string&#10;  envs       &#61; optional&#40;map&#40;string&#41;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> | ✓ |  |
 | [organization](variables.tf#L95) | Organization details. | <code title="object&#40;&#123;&#10;  domain      &#61; string&#10;  id          &#61; number&#10;  customer_id &#61; string&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> | ✓ |  |
 | [prefix](variables.tf#L111) | Prefix used for resources that need unique names. Use 9 characters or less. | <code>string</code> | ✓ |  |
-| [tenant_accounts](variables.tf#L166) | Base Tenant accounts that are created for each folder, provided as a combination of environment and tenant. | <code title="map&#40;object&#40;&#123;&#10;  tenant          &#61; string&#10;  env             &#61; string&#10;  main_project    &#61; string&#10;  admin_principal &#61; string&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> | ✓ |  |
+| [regions](variables.tf#L142) | Region definitions. Inherited from 0-bootstrap outputs. Must be specified in bootstrap terraform.tfvars. | <code title="object&#40;&#123;&#10;  primary &#61; string&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> | ✓ |  |
+| [tenant_accounts](variables.tf#L164) | Base Tenant accounts that are created for each folder, provided as a combination of environment and tenant. | <code title="map&#40;object&#40;&#123;&#10;  tenant          &#61; string&#10;  env             &#61; string&#10;  main_project    &#61; string&#10;  admin_principal &#61; string&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> | ✓ |  |
+| [assured_workloads](variables.tf#L193) | Assured Workloads configuration. | <code>any</code> |  | <code>null</code> |
+| [billing_override](variables.tf#L184) | Optional billing override configuration. If set, disables service account impersonation for project billing linkage and runs under the user account using the specified quota projects. | <code title="object&#40;&#123;&#10;  project         &#61; string&#10;  billing_project &#61; string&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>null</code> |
+| [cidrs](variables.tf#L274) | Named CIDR ranges to use in firewall rules. | <code>map&#40;list&#40;string&#41;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [common_services_folder](variables.tf#L199) | Common services folder ID. | <code>string</code> |  | <code>null</code> |
 | [dns](variables.tf#L42) | DNS configuration. | <code title="object&#40;&#123;&#10;  enable_logging &#61; optional&#40;bool, true&#41;&#10;  resolvers      &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [dns_policy_rules](variables.tf#L260) | DNS response policy rules in name => rule format. | <code title="map&#40;object&#40;&#123;&#10;  dns_name &#61; string&#10;  behavior &#61; optional&#40;string, &#34;bypassResponsePolicy&#34;&#41;&#10;  local_data &#61; optional&#40;map&#40;object&#40;&#123;&#10;    ttl     &#61; optional&#40;number&#41;&#10;    rrdatas &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  &#125;&#41;&#41;, &#123;&#125;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |
 | [essential_contacts](variables.tf#L59) | Email used for essential contacts, unset if null. | <code>string</code> |  | <code>null</code> |
 | [factories_config](variables.tf#L65) | Configuration for network resource factories. | <code title="object&#40;&#123;&#10;  data_dir              &#61; optional&#40;string, &#34;data&#34;&#41;&#10;  dns_policy_rules_file &#61; optional&#40;string, &#34;data&#47;dns-policy-rules.yaml&#34;&#41;&#10;  firewall_policy_name  &#61; optional&#40;string, &#34;net-default&#34;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code title="&#123;&#10;  data_dir &#61; &#34;data&#34;&#10;&#125;">&#123;&#8230;&#125;</code> |
+| [fast_features](variables.tf#L211) | FAST features enabled. | <code>any</code> |  | <code>null</code> |
+| [firewall_rules](variables.tf#L281) | Firewall rules for each VPC / environment spoke. | <code title="map&#40;object&#40;&#123;&#10;  ingress &#61; optional&#40;map&#40;object&#40;&#123;&#10;    description          &#61; optional&#40;string&#41;&#10;    deny                 &#61; optional&#40;bool, false&#41;&#10;    source_ranges        &#61; optional&#40;list&#40;string&#41;&#41;&#10;    sources              &#61; optional&#40;list&#40;string&#41;&#41;&#10;    targets              &#61; optional&#40;list&#40;string&#41;&#41;&#10;    use_service_accounts &#61; optional&#40;bool, false&#41;&#10;    rules &#61; optional&#40;list&#40;object&#40;&#123;&#10;      protocol &#61; string&#10;      ports    &#61; optional&#40;list&#40;string&#41;&#41;&#10;    &#125;&#41;&#41;&#41;&#10;  &#125;&#41;&#41;, &#123;&#125;&#41;&#10;  egress &#61; optional&#40;map&#40;object&#40;&#123;&#10;    description          &#61; optional&#40;string&#41;&#10;    deny                 &#61; optional&#40;bool, true&#41;&#10;    destination_ranges   &#61; optional&#40;list&#40;string&#41;&#41;&#10;    targets              &#61; optional&#40;list&#40;string&#41;&#41;&#10;    use_service_accounts &#61; optional&#40;bool, false&#41;&#10;    rules &#61; optional&#40;list&#40;object&#40;&#123;&#10;      protocol &#61; string&#10;      ports    &#61; optional&#40;list&#40;string&#41;&#41;&#10;    &#125;&#41;&#41;&#41;&#10;  &#125;&#41;&#41;, &#123;&#125;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [groups](variables.tf#L217) | IAM groups mapping. | <code>any</code> |  | <code>null</code> |
+| [logging](variables.tf#L205) | Logging configuration. | <code>any</code> |  | <code>null</code> |
 | [outputs_location](variables.tf#L105) | Path where providers and tfvars files for the following stages are written. Leave empty to disable. | <code>string</code> |  | <code>null</code> |
+| [proxy_subnets](variables.tf#L253) | VPC proxy-only subnet CIDRs keyed by environment. | <code>map&#40;string&#41;</code> |  | <code>&#123;&#125;</code> |
 | [psa_ranges](variables.tf#L122) | IP ranges used for Private Service Access (e.g. CloudSQL). Ranges is in name => range format. | <code title="object&#40;&#123;&#10;  dev &#61; optional&#40;list&#40;object&#40;&#123;&#10;    ranges         &#61; map&#40;string&#41;&#10;    export_routes  &#61; optional&#40;bool, false&#41;&#10;    import_routes  &#61; optional&#40;bool, false&#41;&#10;    peered_domains &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  &#125;&#41;&#41;, &#91;&#93;&#41;&#10;  prod &#61; optional&#40;list&#40;object&#40;&#123;&#10;    ranges         &#61; map&#40;string&#41;&#10;    export_routes  &#61; optional&#40;bool, false&#41;&#10;    import_routes  &#61; optional&#40;bool, false&#41;&#10;    peered_domains &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  &#125;&#41;&#41;, &#91;&#93;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |
-| [regions](variables.tf#L142) | Region definitions. | <code title="object&#40;&#123;&#10;  primary &#61; string&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code title="&#123;&#10;  primary &#61; &#34;us-east4&#34;&#10;&#125;">&#123;&#8230;&#125;</code> |
-| [service_accounts](variables.tf#L152) | Automation service accounts in name => email format. | <code title="object&#40;&#123;&#10;  data-platform-dev    &#61; string&#10;  data-platform-prod   &#61; string&#10;  gke-dev              &#61; string&#10;  gke-prod             &#61; string&#10;  project-factory-dev  &#61; string&#10;  project-factory-prod &#61; string&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>null</code> |
-| [vmseries_image](variables.tf#L180) | The image name from which to boot an instance, including a license type (bundle/flex) and version. | <code>string</code> |  | <code>&#34;vmseries-112&#34;</code> |
+| [regime_mapping](variables.tf#L223) | Compliance regime shorthand mapping. | <code>any</code> |  | <code>null</code> |
+| [service_accounts](variables.tf#L150) | Automation service accounts in name => email format. | <code title="object&#40;&#123;&#10;  data-platform-dev    &#61; string&#10;  data-platform-prod   &#61; string&#10;  gke-dev              &#61; string&#10;  gke-prod             &#61; string&#10;  project-factory-dev  &#61; string&#10;  project-factory-prod &#61; string&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>null</code> |
+| [subnets](variables.tf#L229) | VPC subnet configurations keyed by network name. | <code title="map&#40;list&#40;object&#40;&#123;&#10;  name                             &#61; string&#10;  ip_cidr_range                    &#61; string&#10;  region                           &#61; string&#10;  description                      &#61; optional&#40;string&#41;&#10;  enable_private_access            &#61; optional&#40;bool, true&#41;&#10;  allow_subnet_cidr_routes_overlap &#61; optional&#40;bool&#41;&#10;  flow_logs_config &#61; optional&#40;object&#40;&#123;&#10;    aggregation_interval &#61; optional&#40;string&#41;&#10;    filter_expression    &#61; optional&#40;string&#41;&#10;    flow_sampling        &#61; optional&#40;number&#41;&#10;    metadata             &#61; optional&#40;string&#41;&#10;    metadata_fields      &#61; optional&#40;list&#40;string&#41;&#41;&#10;  &#125;&#41;&#41;&#10;  secondary_ip_ranges &#61; optional&#40;map&#40;string&#41;&#41;&#10;  iam                 &#61; optional&#40;map&#40;list&#40;string&#41;&#41;, &#123;&#125;&#41;&#10;  tenant              &#61; optional&#40;string&#41;&#10;&#125;&#41;&#41;&#41;">map&#40;list&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [vmseries_image](variables.tf#L178) | The image name from which to boot an instance, including a license type (bundle/flex) and version. | <code>string</code> |  | <code>&#34;vmseries-112&#34;</code> |
 
 ## Outputs
 
 | name | description | sensitive |
 |---|---|:---:|
-| [host_project_ids](outputs.tf#L60) | Network project ids. |  |
-| [host_project_numbers](outputs.tf#L65) | Network project numbers. |  |
-| [ngfw_password](outputs.tf#L80) | Password for authenticating to the NGFW. | ✓ |
-| [tfvars](outputs.tf#L86) | Terraform variables file for the following stages. | ✓ |
+| [host_project_ids](outputs.tf#L62) | Network project ids. |  |
+| [host_project_numbers](outputs.tf#L67) | Network project numbers. |  |
+| [ngfw_password](outputs.tf#L82) | Password for authenticating to the NGFW. | ✓ |
+| [tfvars](outputs.tf#L88) | Terraform variables file for the following stages. | ✓ |
 <!-- END TFDOC -->

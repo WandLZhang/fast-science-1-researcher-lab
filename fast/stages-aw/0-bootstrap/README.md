@@ -114,6 +114,10 @@ For details on configuring the different billing account modes, refer to the [Ho
 
 Due to limitations of API availability, manual steps have to be followed to enable billing export within the billing Google Cloud Project to BigQuery dataset `billing_export`, which will be created as part of the bootstrap stage. The process to share billing data [is outlined here](https://cloud.google.com/billing/docs/how-to/export-data-bigquery-setup#enable-bq-export).
 
+#### Billing Budgets
+
+A default billing budget can be created for the top-level folder of the landing zone by setting the `billing_budget_amount` variable. This budget will cover all projects created within the Assured Workload folder (or the "no-compliance" folder if Assured Workloads are disabled). The variable is an object that allows specifying the budget amount and optional threshold rules (defaults to 0.5, 0.75, and 0.9).
+
 ### Google Cloud Organization Level Logging
 
 We create Google Cloud Organization level log sinks early in the bootstrap process to ensure a proper audit trail is in place from the very beginning. By default, we provide log filters to capture [Cloud Audit Logs](https://cloud.google.com/logging/docs/audit), [VPC Service Controls violations](https://cloud.google.com/vpc-service-controls/docs/troubleshooting#vpc-sc-errors) and [Workspace Logs](https://cloud.google.com/logging/docs/audit/configure-gsuite-audit-logs) into logging buckets in the top-level audit logging Google Cloud Project. In addition, a log sink with an empty filter is included to comply with [Center for Internet Security (CIS) Benchmarks](https://cloud.google.com/security/compliance/cis) related to log sinks.
@@ -126,7 +130,7 @@ We are intentionally not supporting random prefix/suffixes for names, as that is
 
 What is implemented here is a fairly common convention, composed of tokens ordered by relative importance
 
-- an Google Cloud Organization level static prefix less or equal to 9 characters (e.g. `myco` or `myco-gcp`)
+- an Google Cloud Organization level static prefix less or equal to 7 characters (e.g. `myco` or `myco-gcp`)
 - an environment identifier (e.g. `prod`)
 - a team/owner identifier (e.g. `sec` for Security)
 - a context identifier (e.g. `core` or `kms`)
@@ -167,7 +171,7 @@ This stage also implements initial support for two interrelated features
 
 Workload Identity Federation support allows configuring external providers independently from CI/CD, and offers predefined attributes for a few well known ones (more can be easily added by editing the `identity-providers.tf` file). Once providers have been configured their names are passed to the following stages via interface outputs, and can be leveraged to set up access or impersonation in IAM bindings.
 
-CI/CD support is fully implemented for GitHub, Gitlab, and Cloud Source Repositories / Cloud Build. For GitHub, we also offer a [separate supporting setup](../../extras/0-cicd-github/) to quickly create/configure repositories.
+CI/CD support is fully implemented for GitHub, Gitlab, and Cloud Source Repositories / Cloud Build.
 
 For details on how to configure both features, refer to the Customizations sections below on [Workload Identity Federation](#workload-identity-federation) and [CI/CD repositories](#cicd-repositories).
 
@@ -175,7 +179,7 @@ These features are optional and only enabled if the relevant variables have been
 
 ## How to Run This Stage
 
-For detailed information on prerequisites and steps to deploy this stage, please see the latest [Detailed Deployment Guide (DDG)](https://drive.google.com/drive/u/0/folders/1OLgdf_VnY8zdkcmxHPwhEVoidGAqY6PX) If you do not have access, you will have to request it.
+For detailed information on prerequisites and steps to deploy this stage, please see the latest [Detailed Deployment Guide (DDG)](/docs/ddg.md) If you do not have access, you will have to request it.
 
 ## Customizations
 
@@ -325,7 +329,6 @@ The `type` attribute can be set to one of the supported repository types: `githu
 
 Once the stage is applied the generated output files will contain pre-configured workflow files for each repository, that will use Workload Identity Federation via a dedicated service account for each repository to impersonate the automation service account for the stage.
 
-You can use Terraform to automate creation of the repositories using the extra stage defined in [fast/extras/0-cicd-github](../../extras/0-cicd-github/) (only for Github for now).
 
 The remaining configuration is manual, as it regards the repositories themselves
 
@@ -374,9 +377,10 @@ The `fast_features` variable consists of 4 toggles
 |---|---|:---:|:---:|:---:|
 | [alert_email](variables.tf#L16) | Email to receive log alerts. | <code>string</code> | ✓ |  |
 | [billing_account](variables.tf#L34) | Billing account id. If billing account is not part of the same org set `is_org_level` to `false`. To disable handling of billing IAM roles set `no_iam` to `true`. | <code title="object&#40;&#123;&#10;  id           &#61; string&#10;  is_org_level &#61; optional&#40;bool, true&#41;&#10;  no_iam       &#61; optional&#40;bool, false&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> | ✓ |  |
+| [billing_budget_amount](variables.tf#L44) | Budget configuration for the AW folder. Includes amount and optional threshold rules (defaults to 0.5, 0.75, 0.9). If null, no budget will be created. | <code title="object&#40;&#123;&#10;  amount          &#61; number&#10;  threshold_rules &#61; optional&#40;list&#40;number&#41;, &#91;0.5, 0.75, 0.9&#93;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>null</code> |
 | [bootstrap_project](variables.tf#L44) | Bootstrap project ID. | <code>string</code> | ✓ |  |
 | [organization](variables.tf#L260) | Organization details. | <code title="object&#40;&#123;&#10;  id          &#61; number&#10;  domain      &#61; optional&#40;string&#41;&#10;  customer_id &#61; optional&#40;string&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> | ✓ |  |
-| [prefix](variables.tf#L275) | Prefix used for resources that need unique names. Use 9 characters or less. | <code>string</code> | ✓ |  |
+| [prefix](variables.tf#L275) | Prefix used for resources that need unique names. Use 7 characters or less. | <code>string</code> | ✓ |  |
 | [assured_workloads](variables.tf#L21) | Configuration for Assured Workloads. | <code title="object&#40;&#123;&#10;  regime   &#61; string&#10;  location &#61; string&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code title="&#123;&#10;  regime   &#61; &#34;IL5&#34;&#10;  location &#61; &#34;US&#34;&#10;&#125;">&#123;&#8230;&#125;</code> |
 | [bootstrap_user](variables.tf#L49) | Email of the nominal user running this stage for the first time. | <code>string</code> |  | <code>null</code> |
 | [cicd_repositories](variables.tf#L55) | CI/CD repository configuration. Identity providers reference keys in the `federated_identity_providers` variable. Set to null to disable, or set individual repositories to null if not needed. | <code title="object&#40;&#123;&#10;  bootstrap &#61; optional&#40;object&#40;&#123;&#10;    name              &#61; string&#10;    type              &#61; string&#10;    branch            &#61; optional&#40;string&#41;&#10;    identity_provider &#61; optional&#40;string&#41;&#10;  &#125;&#41;&#41;&#10;  resman &#61; optional&#40;object&#40;&#123;&#10;    name              &#61; string&#10;    type              &#61; string&#10;    branch            &#61; optional&#40;string&#41;&#10;    identity_provider &#61; optional&#40;string&#41;&#10;  &#125;&#41;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>null</code> |

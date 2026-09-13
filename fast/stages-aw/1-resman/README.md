@@ -23,7 +23,7 @@ The design of this stage ensures that all parts of a Stellar Engine deployment r
 
 ## How to Run This Stage
 
-For detailed information on prerequisites and steps to deploy this stage, please see the latest [Detailed Deployment Guide (DDG)](https://drive.google.com/drive/u/0/folders/1OLgdf_VnY8zdkcmxHPwhEVoidGAqY6PX) If you do not have access, you will have to request it.
+For detailed information on prerequisites and steps to deploy this stage, please see the latest [Detailed Deployment Guide (DDG)](/docs/ddg.md) If you do not have access, you will have to request it.
 
 ### Impersonating the Automation Service Account
 
@@ -31,7 +31,7 @@ The preconfigured provider file uses impersonation to run with this stage's auto
 
 ### Lightweight multitenancy
 
-If the organization needs to support tenants without the full complexity and separation offered by our [full multitenant support](../../stages-multitenant/), this stage offers a simplified setup which is suitable for cases where tenants have less autonomy, and don't need to implement FAST stages inside their reserved partition.
+If the organization needs to support tenants without the full complexity and separation offered by our full multitenant support, this stage offers a simplified setup which is suitable for cases where tenants have less autonomy, and don't need to implement FAST stages inside their reserved partition.
 
 This mode is activated by defining tenants in the `tenants` variable, while IAM configurations that apply to every tenant can be optionally set in the `tenants_config` variable.
 
@@ -122,7 +122,7 @@ This is a list of the variables that need edited to set the Tenant name.
 
 ```tfvars
 tenants = {
-{{EDIT_THIS_VARIABLE_TO_THE_FIRST_TENANT_NAME}} =
+{{EDIT_THIS_VARIABLE_TO_THE_FIRST_TENANT_NAME}} = {
   admin_principal  = "group:gcp-devops@example.com"
   descriptive_name = "{{EDIT_THIS_VARIABLE_TO_THE_FIRST_TENANT_DESCRIPTION}}"
   locations = {
@@ -130,7 +130,7 @@ tenants = {
     kms = "us-east4" # Must match GCS Region
    }
  },
-  {{EDIT_THIS_VARIABLE_TO_THE_SECOND_TENANT_NAME}} =
+  {{EDIT_THIS_VARIABLE_TO_THE_SECOND_TENANT_NAME}} = {
    admin_principal  = "group:gcp-devops@example.com"
    descriptive_name = "{{EDIT_THIS_VARIABLE_TO_THE_SECOND_TENANT_DESCRIPTION}}"
    locations = {
@@ -145,7 +145,7 @@ This is an example that shows a configured variable block with two example Tenan
 
 ```tfvars
 tenants = {
-wingarch =
+wingarch = {
   admin_principal  = "group:gcp-devops@example.com"
   descriptive_name = "Wing Architect Research Group"
   locations = {
@@ -153,7 +153,7 @@ wingarch =
     kms = "us-east4" # Must match GCS Region
    }
  },
-  fuselagerd =
+  fuselagerd = {
    admin_principal  = "group:gcp-devops@example.com"
    descriptive_name = "Fuselage Research & Development Group"
    locations = {

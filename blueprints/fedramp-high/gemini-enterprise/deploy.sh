@@ -525,9 +525,15 @@ discover_infrastructure() {
 
     if [[ "$IS_BROWNFIELD" == "true" ]]; then
         # 1. Extract Environment and Tenant
-        # Format: prefix-env-tenant-main-0
+        # Format: prefix-env-tenant-main-0. The tenant id may itself contain
+        # hyphens (FAST tenants are typically named like "ten-1"), so take
+        # everything between the environment and the "-main-0" suffix rather
+        # than the third hyphen-separated field.
         ENVIRONMENT=$(echo "$PROJECT_ID" | cut -d'-' -f2)
-        TENANT_VAL=$(echo "$PROJECT_ID" | cut -d'-' -f3)
+        TENANT_VAL=$(echo "$PROJECT_ID" | sed -E 's/^[^-]+-[^-]+-(.+)-main-0$/\1/')
+        if [[ "$TENANT_VAL" == "$PROJECT_ID" ]]; then
+            TENANT_VAL=""
+        fi
         
         # Validate extraction (basic check)
         if [[ -z "$ENVIRONMENT" || -z "$TENANT_VAL" ]]; then
@@ -573,7 +579,9 @@ discover_infrastructure() {
         fi
 
         # 3. Check State Bucket
-        POTENTIAL_BUCKET="${PREFIX}-${ENVIRONMENT}-${TENANT}-iac-0"
+        # 1-resman names the tenant state bucket <prefix>-tn-<env>-<tenant>-0
+        # (branch-tenants.tf, module tenant-core-gcs).
+        POTENTIAL_BUCKET="${PREFIX}-tn-${ENVIRONMENT}-${TENANT}-0"
         echo "Checking for Terraform State Bucket: ${POTENTIAL_BUCKET}..."
         if gcloud storage buckets describe "gs://${POTENTIAL_BUCKET}" &>/dev/null; then
             STATE_BUCKET="${POTENTIAL_BUCKET}"
@@ -1152,9 +1160,9 @@ configure_access_policies() {
         read -p "Restrict incoming traffic based on a specific time schedule (Business Hours)? (y/N): " TIME_CHOICE
         if [[ "$TIME_CHOICE" == "y" || "$TIME_CHOICE" == "Y" ]]; then
             CREATE_TIME_ACCESS="true"
-            read -p "Enter Start Day (1=Mon, 7=Sun) [1]: " ACCESS_START_DAY
+            read -p "Enter Start Day (0=Sun, 6=Sat) [1]: " ACCESS_START_DAY
             ACCESS_START_DAY=${ACCESS_START_DAY:-1}
-            read -p "Enter End Day (1=Mon, 7=Sun) [5]: " ACCESS_END_DAY
+            read -p "Enter End Day (0=Sun, 6=Sat) [5]: " ACCESS_END_DAY
             ACCESS_END_DAY=${ACCESS_END_DAY:-5}
             read -p "Enter Start Hour (0-23) [7]: " ACCESS_START_HOUR
             ACCESS_START_HOUR=${ACCESS_START_HOUR:-7}
@@ -1251,6 +1259,179 @@ configure_access_policies() {
     fi
 
     echo -e "${GREEN}Access Policy Configuration Complete.${NC}"
+}
+
+strip_gemini_apps_tfvars() {
+    # Remove any existing top-level `gemini_apps = {...}` assignment from a tfvars
+    # file so callers can rewrite it in place. HCL rejects two assignments to the
+    # same argument, and the map is emitted by jq across multiple lines, so this
+    # tracks brace depth to drop the whole block rather than a single line.
+    local file="$1"
+    [[ -f "$file" ]] || return 0
+
+    local tmp
+    tmp=$(mktemp)
+    awk '
+        skip {
+            n = gsub(/{/, "{"); depth += n
+            m = gsub(/}/, "}"); depth -= m
+            if (depth <= 0) skip = 0
+            next
+        }
+        /^[[:space:]]*gemini_apps[[:space:]]*=/ {
+            skip = 1; depth = 0
+            n = gsub(/{/, "{"); depth += n
+            m = gsub(/}/, "}"); depth -= m
+            if (depth <= 0) skip = 0
+            next
+        }
+        { print }
+    ' "$file" > "$tmp" && mv "$tmp" "$file"
+}
+
+prompt_gemini_apps() {
+    # Expects global arrays GCS_KEYS and BQ_KEYS to be populated with available keys.
+    # Outputs the generated JSON in APPS_OBJ.
+    
+    echo ""
+    echo -e "${BLUE}--- Gemini Enterprise Applications ---${NC}"
+    echo -e "${YELLOW}Configure the Gemini Enterprise applications to deploy.${NC}"
+    
+    APPS_OBJ="{}"
+    while true; do
+        APP_DISPLAY=""
+        while [[ -z "$APP_DISPLAY" ]]; do
+            read -p "Please enter a Display Name for the Application: " APP_DISPLAY
+        done
+        
+        APP_COMPANY=""
+        while [[ -z "$APP_COMPANY" ]]; do
+            read -p "Please enter the Agency / Department Name (no abbreviations): " APP_COMPANY
+        done
+
+        # Random App Key suffix
+        APP_SUFFIX=$(python3 -c "import random, string; print(''.join(random.choices(string.ascii_lowercase + string.digits, k=4)))")
+        ENG_ID="g4g-gem-ent-app-${APP_SUFFIX}"
+        
+        SELECTED_GCS_KEYS=()
+        SELECTED_BQ_KEYS=()
+        
+        # Select GCS Data Stores
+        if [[ ${#GCS_KEYS[@]} -gt 0 ]]; then
+             echo "Available Google Cloud Storage Data Stores to link:"
+             i=1
+             for key in "${GCS_KEYS[@]}"; do
+                 echo "$i) $key"
+                 ((i++))
+             done
+             read -p "Select GCS Data Stores to link (comma-separated numbers, e.g. 1,3) [Enter to skip]: " GCS_SEL
+             if [[ -n "$GCS_SEL" ]]; then
+                 IFS=',' read -ra SEL_INDICES <<< "$GCS_SEL"
+                 for index in "${SEL_INDICES[@]}"; do
+                     index=$(echo "$index" | xargs)
+                     if [[ "$index" =~ ^[0-9]+$ ]] && (( index >= 1 && index <= ${#GCS_KEYS[@]} )); then
+                         SELECTED_GCS_KEYS+=("\"${GCS_KEYS[$((index-1))]}\"")
+                     fi
+                 done
+             fi
+        fi
+
+        # Select BQ Data Stores
+        if [[ ${#BQ_KEYS[@]} -gt 0 ]]; then
+             echo "Available BigQuery Data Stores to link:"
+             i=1
+             for key in "${BQ_KEYS[@]}"; do
+                 echo "$i) $key"
+                 ((i++))
+             done
+             read -p "Select BQ Data Stores to link (comma-separated numbers, e.g. 1,3) [Enter to skip]: " BQ_SEL
+             if [[ -n "$BQ_SEL" ]]; then
+                 IFS=',' read -ra SEL_INDICES <<< "$BQ_SEL"
+                 for index in "${SEL_INDICES[@]}"; do
+                     index=$(echo "$index" | xargs)
+                     if [[ "$index" =~ ^[0-9]+$ ]] && (( index >= 1 && index <= ${#BQ_KEYS[@]} )); then
+                         SELECTED_BQ_KEYS+=("\"${BQ_KEYS[$((index-1))]}\"")
+                     fi
+                 done
+             fi
+        fi
+
+        echo ""
+        echo -e "${RED}WARNING: Enabling Gemini Enterprise Usage Audit logs will write user queries, model thinking, and model responses to Cloud Logging.${NC}"
+        echo -e "${RED}You must ensure that logging permissions are set to allow only necessary principals to access.${NC}"
+        read -p "Would you like to enable Gemini Enterprise Usage Audit logs (conversation logging) for this application? [y/N]: " ENABLE_AUDIT_LOGS
+        if [[ "$ENABLE_AUDIT_LOGS" =~ ^[Yy]$ ]]; then
+            ENABLE_AUDIT_LOGS_FLAG="true"
+        else
+            ENABLE_AUDIT_LOGS_FLAG="false"
+        fi
+
+        echo ""
+        echo -e "${YELLOW}Agent Sharing Feature:${NC}"
+        echo -e "${YELLOW}When enabled, users can share agents with other users using the Gemini Enterprise app.${NC}"
+        read -p "Would you like to enable the 'Agent Sharing' feature? [y/N]: " ENABLE_AGENT_SHARING
+        if [[ "$ENABLE_AGENT_SHARING" =~ ^[Yy]$ ]]; then
+            ENABLE_AGENT_SHARING_FLAG="true"
+        else
+            ENABLE_AGENT_SHARING_FLAG="false"
+        fi
+
+        echo ""
+        echo -e "${YELLOW}Agent Sharing without Admin Approval Feature:${NC}"
+        echo -e "${YELLOW}When enabled, users on your team can share and use agents without admin approval when using the Gemini Enterprise app.${NC}"
+        read -p "Would you like to enable 'Agent Sharing without Admin Approval'? [y/N]: " ENABLE_AGENT_SHARING_NO_APPROVAL
+        if [[ "$ENABLE_AGENT_SHARING_NO_APPROVAL" =~ ^[Yy]$ ]]; then
+            ENABLE_AGENT_SHARING_NO_APPROVAL_FLAG="true"
+        else
+            ENABLE_AGENT_SHARING_NO_APPROVAL_FLAG="false"
+        fi
+
+        ENABLE_MODEL_ARMOR_FLAG="false"
+        if [[ "$COMPLIANCE_REGIME" == "FEDRAMP_HIGH" || "$COMPLIANCE_REGIME" == "NONE" ]]; then
+            echo ""
+            echo -e "${YELLOW}Model Armor Feature:${NC}"
+            echo -e "${YELLOW}When enabled, Model Armor enhances the security and safety of your AI applications by proactively screening the prompts and responses given by the Gemini Enterprise assistant.${NC}"
+            read -p "Would you like to enable 'Model Armor'? [y/N]: " ENABLE_MODEL_ARMOR
+            if [[ "$ENABLE_MODEL_ARMOR" =~ ^[Yy]$ ]]; then
+                ENABLE_MODEL_ARMOR_FLAG="true"
+                echo -e "${BLUE}Enabling Model Armor API...${NC}"
+                gcloud services enable modelarmor.googleapis.com
+                echo ""
+                echo -e "${BLUE}--- Model Armor ---${NC}"
+                echo -e "${YELLOW}Model Armor enhances the security and safety of your AI applications by proactively screening the prompts and responses given by the Gemini Enterprise assistant.${NC}"
+                echo ""
+                echo -e "Please review the configuration in: ${BLUE}blueprints/fedramp-high/gemini-enterprise/gemini-stage-0/model_armor.tf${NC}"
+                echo -e "For more information on configuring Model Armor templatees, visit: ${BLUE}https://docs.cloud.google.com/model-armor/manage-templates#create-ma-template${NC}"
+                echo ""
+                read -p "Press Enter to acknowledge and continue..."
+            else
+                ENABLE_MODEL_ARMOR_FLAG="false"
+            fi
+        fi
+
+        GCS_KEYS_STR="[$(IFS=,; echo "${SELECTED_GCS_KEYS[*]}")]"
+        BQ_KEYS_STR="[$(IFS=,; echo "${SELECTED_BQ_KEYS[*]}")]"
+
+        APP_JSON=$(jq -n \
+            --arg display "$APP_DISPLAY" \
+            --arg company "$APP_COMPANY" \
+            --argjson gcs_keys "$GCS_KEYS_STR" \
+            --argjson bq_keys "$BQ_KEYS_STR" \
+            --argjson agent_sharing "$ENABLE_AGENT_SHARING_FLAG" \
+            --argjson agent_sharing_no_approval "$ENABLE_AGENT_SHARING_NO_APPROVAL_FLAG" \
+            --argjson audit_logs "$ENABLE_AUDIT_LOGS_FLAG" \
+            --argjson model_armor "$ENABLE_MODEL_ARMOR_FLAG" \
+            '{display_name: $display, company_name: $company, gcs_data_store_keys: $gcs_keys, bq_data_store_keys: $bq_keys, enable_agent_sharing: $agent_sharing, enable_agent_sharing_without_approval: $agent_sharing_no_approval, enable_audit_logs: $audit_logs, enable_model_armor: $model_armor}')
+        
+        # Add to the apps map
+        APPS_OBJ=$(echo "$APPS_OBJ" | jq --arg key "$ENG_ID" --argjson val "$APP_JSON" '. + {($key): $val}')
+
+        echo ""
+        read -p "Do you want to configure another Gemini Enterprise Application? [y/N]: " CREATE_APP
+        if [[ ! "$CREATE_APP" =~ ^[Yy]$ ]]; then
+            break
+        fi
+    done
 }
 
 configure_stage_0() {
@@ -1374,6 +1555,8 @@ configure_stage_0() {
             echo -e "${RED}Proceed at your own risk.${NC}"
             echo ""
             read -p "Press Enter to acknowledge and continue..."
+            COMPLIANCE_REGIME="NONE"
+            REGIME_DISPLAY="None"
             ;;
         *)
             echo -e "${RED}Invalid selection. Defaulting to FedRAMP High.${NC}"
@@ -1387,20 +1570,20 @@ configure_stage_0() {
         echo ""
         echo -e "${RED}WARNING: Discovery Engine API is not currently included in the Assured Workloads Service Usage Allowlist Org Policy for IL5.${NC}"
         echo -e "${RED}Gemini for Government can only be used by creating an exception and adding discoveryengine.googleapis.com to the allowlist.${NC}"
-        read -p "Do you want to attempt to enable Discovery Engine and Certificate Manager APIs? [y/N]: " ENABLE_APIS_NOW
+        read -p "Do you want to attempt to enable the required APIs (Discovery Engine, Cert Manager, Cloud Identity, AI Platform)? [y/N]: " ENABLE_APIS_NOW
         if [[ "$ENABLE_APIS_NOW" =~ ^[Yy]$ ]]; then
             echo "Attempting to enable APIs..."
-            if ! gcloud services enable discoveryengine.googleapis.com certificatemanager.googleapis.com --project "${PROJECT_ID}"; then
-                echo -e "${RED}WARNING: Failed to enable Discovery Engine or Certificate Manager APIs.${NC}"
+            if ! gcloud services enable discoveryengine.googleapis.com certificatemanager.googleapis.com cloudidentity.googleapis.com aiplatform.googleapis.com --project "${PROJECT_ID}"; then
+                echo -e "${RED}WARNING: Failed to enable one or more requested APIs.${NC}"
                 echo -e "${RED}This is expected if the APIs are not in your allowlist and you have not created an exception.${NC}"
             fi
         else
             echo -e "${YELLOW}Skipping API enablement. You may need to enable them manually after configuring exceptions.${NC}"
         fi
     else
-        echo -e "${GREEN}Enabling Discovery Engine and Certificate Manager APIs automatically...${NC}"
-        if ! gcloud services enable discoveryengine.googleapis.com certificatemanager.googleapis.com --project "${PROJECT_ID}"; then
-            echo -e "${RED}WARNING: Failed to enable Discovery Engine or Certificate Manager APIs.${NC}"
+        echo -e "${GREEN}Enabling Discovery Engine, Certificate Manager, Cloud Identity, and AI Platform APIs automatically...${NC}"
+        if ! gcloud services enable discoveryengine.googleapis.com certificatemanager.googleapis.com cloudidentity.googleapis.com aiplatform.googleapis.com --project "${PROJECT_ID}"; then
+            echo -e "${RED}WARNING: Failed to enable one or more requested APIs.${NC}"
             echo -e "${RED}Please ensure you have permissions to enable these APIs or they are allowed by your Org Policy.${NC}"
         fi
     fi
@@ -1427,7 +1610,7 @@ configure_stage_0() {
                     echo -e "3. Click on the button to ${GREEN}\"Review available updates\"${NC} and apply them."
                     echo ""
                     read -p "Press Enter to acknowledge and continue..."
-                    echo -e "${GREEN}Assured Workload folder ${WORKLOAD_NAME} validated / updated${NC}"
+                    echo -e "${YELLOW}Please verify that you have reviewed and applied any available updates for Assured Workload folder ${WORKLOAD_NAME}.${NC}"
                 fi
             fi
         fi
@@ -2091,6 +2274,26 @@ configure_stage_0() {
         fi
     fi
 
+    # Extract keys of data stores for linking in apps
+    GCS_KEYS=()
+    if [[ -n "$GCS_LIST" ]]; then
+        for ds in "${GCS_LIST[@]}"; do
+            key=$(echo "$ds" | cut -d'=' -f1 | xargs)
+            [[ -n "$key" ]] && GCS_KEYS+=("$key")
+        done
+    fi
+
+    BQ_KEYS=()
+    if [[ -n "$BQ_LIST" ]]; then
+        for ds in "${BQ_LIST[@]}"; do
+            key=$(echo "$ds" | cut -d'=' -f1 | xargs)
+            [[ -n "$key" ]] && BQ_KEYS+=("$key")
+        done
+    fi
+
+    # Prompts for Gemini Applications configuration
+    prompt_gemini_apps
+
     # 10. Analytics (Discovery Engine Audit Logs)
     echo ""
     echo -e "${BLUE}--- Analytics (Discovery Engine Audit Logs) ---${NC}"
@@ -2310,6 +2513,12 @@ EOF
     # Add Allowed IPs
     echo "allowed_ip_ranges = ${ALLOWED_IPS}" >> gemini-stage-0/terraform.tfvars
 
+    # Write gemini_apps to terraform.tfvars
+    if [[ "$APPS_OBJ" != "{}" && -n "$APPS_OBJ" ]]; then
+         strip_gemini_apps_tfvars gemini-stage-0/terraform.tfvars
+         echo "gemini_apps = ${APPS_OBJ}" >> gemini-stage-0/terraform.tfvars
+    fi
+
     echo -e "${GREEN}Configuration generated in gemini-stage-0/terraform.tfvars${NC}"
 
     return 0
@@ -2340,6 +2549,77 @@ deploy_stage_0() {
         return 1
     fi
     
+    # Post-Deployment: Configure Observability (Audit Logs) and Default Assistants for Gemini Apps
+    echo ""
+    echo "Configuring logging and assistant compliance settings for Gemini applications..."
+    AUDIT_LOGS_MAP=$(terraform output -json gemini_apps_audit_logs 2>/dev/null || echo "{}")
+    MODEL_ARMOR_MAP=$(terraform output -json gemini_apps_model_armor 2>/dev/null || echo "{}")
+    MODEL_ARMOR_TEMPLATE_NAME=$(terraform output -raw model_armor_template_name 2>/dev/null || echo "")
+
+    if [[ -n "$AUDIT_LOGS_MAP" && "$AUDIT_LOGS_MAP" != "{}" ]]; then
+        ACCESS_TOKEN=$(gcloud auth print-access-token)
+        while IFS=$'\t' read -r ENG_ID ENABLE_AUDIT ENABLE_MA ; do
+            if [[ -n "$ENG_ID" ]]; then
+                # A. Configure Observability Config (Audit Logs)
+                if [[ "$ENABLE_AUDIT" == "true" ]]; then
+                    echo "Enabling conversation audit logging for Engine: ${ENG_ID}..."
+                    curl -s -o /dev/null -X PATCH \
+                        -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+                        -H "Content-Type: application/json" \
+                        -H "X-Goog-User-Project: ${PROJECT_ID}" \
+                        "https://us-discoveryengine.googleapis.com/v1alpha/projects/${PROJECT_ID}/locations/us/collections/default_collection/engines/${ENG_ID}?updateMask=observabilityConfig" \
+                        -d '{"observabilityConfig": {"observabilityEnabled": true, "sensitiveLoggingEnabled": true}}'
+                else
+                    echo "Disabling conversation audit logging for Engine: ${ENG_ID}..."
+                    curl -s -o /dev/null -X PATCH \
+                        -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+                        -H "Content-Type: application/json" \
+                        -H "X-Goog-User-Project: ${PROJECT_ID}" \
+                        "https://us-discoveryengine.googleapis.com/v1alpha/projects/${PROJECT_ID}/locations/us/collections/default_collection/engines/${ENG_ID}?updateMask=observabilityConfig" \
+                        -d '{"observabilityConfig": {"observabilityEnabled": false, "sensitiveLoggingEnabled": false}}'
+                fi
+
+                # B. Configure Default Assistant Compliance
+                echo "Applying compliance settings to default assistant for Engine: ${ENG_ID}..."
+                if [[ "$COMPLIANCE_REGIME" == "FEDRAMP_HIGH" || "$COMPLIANCE_REGIME" == "IL4" || "$COMPLIANCE_REGIME" == "IL5" ]]; then
+                     BASE_JSON='{
+  "displayName": "Default Assistant",
+  "webGroundingType": "WEB_GROUNDING_TYPE_ENTERPRISE_WEB_SEARCH",
+  "defaultWebGroundingToggleOff": false,
+  "disableLocationContext": true,
+  "generationConfig": {
+    "defaultLanguage": "en"
+  }
+}'
+                     MASK="displayName,webGroundingType,defaultWebGroundingToggleOff,disableLocationContext,generationConfig.defaultLanguage"
+                else
+                     BASE_JSON='{
+  "displayName": "Default Assistant",
+  "webGroundingType": "WEB_GROUNDING_TYPE_GOOGLE_SEARCH",
+  "defaultWebGroundingToggleOff": false,
+  "disableLocationContext": false
+}'
+                     MASK="displayName,webGroundingType,defaultWebGroundingToggleOff,disableLocationContext"
+                fi
+
+                if [[ "$ENABLE_MA" == "true" && -n "$MODEL_ARMOR_TEMPLATE_NAME" && "$MODEL_ARMOR_TEMPLATE_NAME" != "null" ]]; then
+                     echo "Enabling Model Armor template for Engine: ${ENG_ID}..."
+                     ASSISTANT_BODY=$(echo "$BASE_JSON" | jq --arg template "$MODEL_ARMOR_TEMPLATE_NAME" '. + {customerPolicy: {modelArmorConfig: {userPromptTemplate: $template, responseTemplate: $template, failureMode: "FAIL_OPEN"}}}')
+                     MASK="${MASK},customerPolicy"
+                else
+                     ASSISTANT_BODY="$BASE_JSON"
+                fi
+
+                curl -s -o /dev/null -X PATCH \
+                    -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -H "X-Goog-User-Project: ${PROJECT_ID}" \
+                    "https://us-discoveryengine.googleapis.com/v1alpha/projects/${PROJECT_ID}/locations/us/collections/default_collection/engines/${ENG_ID}/assistants/default_assistant?updateMask=${MASK}" \
+                    -d "${ASSISTANT_BODY}"
+            fi
+        done < <(echo "$AUDIT_LOGS_MAP" | jq -r --argjson ma "$MODEL_ARMOR_MAP" 'to_entries[] | "\(.key)\t\(.value)\t\(($ma[.key]) // false)"')
+    fi
+
     GEMINI_IP=$(terraform output -raw gemini_enterprise_ip 2>/dev/null || echo "N/A")
     CMEK_KEY_ID=$(terraform output -raw cmek_key_id 2>/dev/null || echo "")
     cd ..
@@ -2398,32 +2678,31 @@ deploy_stage_0() {
 
     echo ""
     echo -e "${YELLOW}IMPORTANT NEXT STEPS:${NC}"
-    echo -e "1. From the Main Menu select ${BLUE}Step 2 - Create Gemini Enterprise App (gem4gov-cli)${NC}."
     
     if [[ "$DEPLOY_TYPE" != "none" ]]; then
-        echo -e "2. Setup DNS A Record that points the desired Gemini Enterprise subdomain (i.e. gemini.yourdomain.com) to the provisioned Load Balancer IP address (${GEMINI_IP})."
+        echo -e "1. Setup DNS A Record that points the desired Gemini Enterprise subdomain (i.e. gemini.yourdomain.com) to the provisioned Load Balancer IP address (${GEMINI_IP})."
         if [[ "$CERT_CHOICE" == "google_managed" ]]; then
             DNS_RECORDS=$(terraform -chdir=gemini-stage-0 output -json dns_auth_records 2>/dev/null)
             DNS_NAME=$(echo "$DNS_RECORDS" | jq -r '.[0].name // empty')
             DNS_TYPE=$(echo "$DNS_RECORDS" | jq -r '.[0].type // empty')
             DNS_DATA=$(echo "$DNS_RECORDS" | jq -r '.[0].data // empty')
-            echo -e "3. ${YELLOW}ACTION REQUIRED: Add the following CNAME record to your DNS configuration for the Google-managed certificate authorization!${NC}"
+            echo -e "2. ${YELLOW}ACTION REQUIRED: Add the following CNAME record to your DNS configuration for the Google-managed certificate authorization!${NC}"
             echo -e "   - ${BLUE}Name:${NC} ${DNS_NAME}"
             echo -e "   - ${BLUE}Type:${NC} ${DNS_TYPE}"
             echo -e "   - ${BLUE}Data:${NC} ${DNS_DATA}"
             echo -e "   The certificate will not provision until this CNAME is resolvable."
         else
-            echo -e "3. Provision an SSL Certificate and upload it to Google Cloud Region (${YELLOW}Helper Functions > Upload SSL Certificate${NC})."
+            echo -e "2. Provision an SSL Certificate and upload it to Google Cloud Region (${YELLOW}Helper Functions > Upload SSL Certificate${NC})."
             echo -e "   - Requirements: The certificate must be valid for the domain you intend to use and include the full certificate chain."
         fi
-        echo -e "4. From the Main Menu select ${BLUE}Step 3 - Configure & Deploy Load Balancer / Access Policies (gemini-stage-1)${NC}."
+        echo -e "3. From the Main Menu select ${BLUE}Step 2 - Configure & Deploy Load Balancer / Access Policies (gemini-stage-1)${NC}."
     fi
     
     ENABLE_ANALYTICS_TF=$(grep "enable_analytics" gemini-stage-0/terraform.tfvars | awk -F'=' '{print $2}' | tr -d ' "')
     if [[ "$ENABLE_ANALYTICS_TF" == "true" ]]; then
         echo ""
         echo -e "${YELLOW}Analytics Views:${NC}"
-        echo -e "To create the analytics reporting views, you MUST first generate some activity in the Gemini Enterprise application (created in Step 2)."
+        echo -e "To create the analytics reporting views, you MUST first generate some activity in the Gemini Enterprise application (created in Step 1)."
         echo -e "After activity is generated, run the helper function:"
         echo -e "${YELLOW}Helper Functions${NC} > ${YELLOW}Create BigQuery Analytics Views${NC}"
         echo ""
@@ -2447,13 +2726,10 @@ ensure_gem4gov_installed() {
     return 0
 }
 
-configure_gem4gov() {
+configure_gemini_apps() {
     echo ""
-    echo -e "${BLUE}--- Configure Gemini Enterprise App (gem4gov) ---${NC}"
+    echo -e "${BLUE}--- Configure Gemini Enterprise Applications (Stage 0) ---${NC}"
     
-    if ! ensure_gem4gov_installed; then
-        return 1
-    fi
 
     # Retrieve outputs from Stage 0 state
     # Ensure BUCKET_NAME is set from STATE_BUCKET if not already
@@ -2475,199 +2751,58 @@ configure_gem4gov() {
     # Parse Load Balancer IP for display
     GEMINI_IP=$(echo "$STATE_CONTENT" | jq -r '.outputs.gemini_enterprise_ip.value // "N/A"')
     
-    # Parse Data Stores
-    GCS_JSON_RAW=$(echo "$STATE_CONTENT" | jq -c '.outputs.gcs_data_stores.value // {} | to_entries | map(select(.value.data_store_id != null)) | map(.value)' 2>/dev/null)
-    BQ_JSON_RAW=$(echo "$STATE_CONTENT" | jq -c '.outputs.bq_data_stores.value // {} | to_entries | map(select(.value.data_store_id != null)) | map(.value)' 2>/dev/null)
+    # Extract GCS and BQ keys from the state outputs to populate prompt options
+    GCS_KEYS=()
+    while IFS= read -r key; do [[ -n "$key" ]] && GCS_KEYS+=("$key"); done < <(echo "$STATE_CONTENT" | jq -r '.outputs.gcs_data_stores.value // {} | keys[]')
     
-    if [[ "$GCS_JSON_RAW" == "[]" || -z "$GCS_JSON_RAW" ]]; then GCS_JSON_RAW=""; fi
-    if [[ "$BQ_JSON_RAW" == "[]" || -z "$BQ_JSON_RAW" ]]; then BQ_JSON_RAW=""; fi
+    BQ_KEYS=()
+    while IFS= read -r key; do [[ -n "$key" ]] && BQ_KEYS+=("$key"); done < <(echo "$STATE_CONTENT" | jq -r '.outputs.bq_data_stores.value // {} | keys[]')
 
-    DS_ID_ARRAY=()
-    DS_DISPLAY_ARRAY=()
+    # Prompts for Gemini Applications configuration
+    prompt_gemini_apps
     
-    if [[ -n "$GCS_JSON_RAW" ]]; then
-        while IFS= read -r id; do [[ -n "$id" ]] && DS_ID_ARRAY+=("$id"); done < <(echo "$GCS_JSON_RAW" | jq -r '.[].data_store_id')
-        while IFS= read -r disp; do [[ -n "$disp" ]] && DS_DISPLAY_ARRAY+=("$disp"); done < <(echo "$GCS_JSON_RAW" | jq -r '.[].display_name')
-    fi
-    if [[ -n "$BQ_JSON_RAW" ]]; then
-        while IFS= read -r id; do [[ -n "$id" ]] && DS_ID_ARRAY+=("$id"); done < <(echo "$BQ_JSON_RAW" | jq -r '.[].data_store_id')
-        while IFS= read -r disp; do [[ -n "$disp" ]] && DS_DISPLAY_ARRAY+=("$disp"); done < <(echo "$BQ_JSON_RAW" | jq -r '.[].display_name')
-    fi
-
-    echo ""
-    echo -e "${BLUE}--- Application Details ---${NC}"
-    echo -e "${YELLOW}Please provide details for the Gemini Enterprise Application.${NC}"
-    APP_LIST=()
-    
-    while true; do
-        APP_DISPLAY=""
-        while [[ -z "$APP_DISPLAY" ]]; do
-            read -p "Please enter a Display Name for the Application: " APP_DISPLAY
-        done
-        
-        APP_COMPANY=""
-        while [[ -z "$APP_COMPANY" ]]; do
-            read -p "Please enter the Agency / Department Name (no abbreviations): " APP_COMPANY
-        done
-        
-        echo ""
-        echo -e "${RED}WARNING: Enabling Gemini Enterprise Usage Audit logs will write user queries, model thinking, and model responses to Cloud Logging.${NC}"
-        echo -e "${RED}You must ensure that logging permissions are set to allow only necessary principals to access.${NC}"
-        read -p "Would you like to enable Gemini Enterprise Usage Audit logs (conversation logging) for this application? [y/N]: " ENABLE_AUDIT_LOGS
-        if [[ "$ENABLE_AUDIT_LOGS" =~ ^[Yy]$ ]]; then
-            ENABLE_AUDIT_LOGS_FLAG="true"
-        else
-            ENABLE_AUDIT_LOGS_FLAG="false"
-        fi
-
-        echo ""
-        echo -e "${YELLOW}Agent Sharing Feature:${NC}"
-        echo -e "${YELLOW}When enabled, users can share agents with other users using the Gemini Enterprise app.${NC}"
-        read -p "Would you like to enable the 'Agent Sharing' feature? [y/N]: " ENABLE_AGENT_SHARING
-        if [[ "$ENABLE_AGENT_SHARING" =~ ^[Yy]$ ]]; then
-            ENABLE_AGENT_SHARING_FLAG="true"
-            sed -i '' 's/disable-agent-sharing:.*/disable-agent-sharing: "FEATURE_STATE_OFF"/' gem4gov-cli/engine_features.yaml 2>/dev/null || sed -i 's/disable-agent-sharing:.*/disable-agent-sharing: "FEATURE_STATE_OFF"/' gem4gov-cli/engine_features.yaml
-        else
-            ENABLE_AGENT_SHARING_FLAG="false"
-            sed -i '' 's/disable-agent-sharing:.*/disable-agent-sharing: "FEATURE_STATE_ON"/' gem4gov-cli/engine_features.yaml 2>/dev/null || sed -i 's/disable-agent-sharing:.*/disable-agent-sharing: "FEATURE_STATE_ON"/' gem4gov-cli/engine_features.yaml
-        fi
-
-        echo ""
-        echo -e "${YELLOW}Agent Sharing without Admin Approval Feature:${NC}"
-        echo -e "${YELLOW}When enabled, users on your team can share and use agents without admin approval when using the Gemini Enterprise app.${NC}"
-        read -p "Would you like to enable 'Agent Sharing without Admin Approval'? [y/N]: " ENABLE_AGENT_SHARING_NO_APPROVAL
-        if [[ "$ENABLE_AGENT_SHARING_NO_APPROVAL" =~ ^[Yy]$ ]]; then
-            ENABLE_AGENT_SHARING_NO_APPROVAL_FLAG="true"
-            sed -i '' 's/agent-sharing-without-admin-approval:.*/agent-sharing-without-admin-approval: "FEATURE_STATE_ON"/' gem4gov-cli/engine_features.yaml 2>/dev/null || sed -i 's/agent-sharing-without-admin-approval:.*/agent-sharing-without-admin-approval: "FEATURE_STATE_ON"/' gem4gov-cli/engine_features.yaml
-        else
-            ENABLE_AGENT_SHARING_NO_APPROVAL_FLAG="false"
-            sed -i '' 's/agent-sharing-without-admin-approval:.*/agent-sharing-without-admin-approval: "FEATURE_STATE_OFF"/' gem4gov-cli/engine_features.yaml 2>/dev/null || sed -i 's/agent-sharing-without-admin-approval:.*/agent-sharing-without-admin-approval: "FEATURE_STATE_OFF"/' gem4gov-cli/engine_features.yaml
-        fi
-        
-        echo ""
-        # Determine App Key
-        APP_SUFFIX=$(python3 -c "import random, string; print(''.join(random.choices(string.ascii_lowercase + string.digits, k=4)))")
-        ENG_ID="g4g-gem-ent-app-${APP_SUFFIX}"
-        
-        SELECTED_IDS=""
-        if [[ ${#DS_ID_ARRAY[@]} -gt 0 ]]; then
-            echo -e "${YELLOW}Available Data Stores for association:${NC}"
-            i=1
-            for idx in "${!DS_ID_ARRAY[@]}"; do
-                echo "$i. ${DS_DISPLAY_ARRAY[$idx]} (${DS_ID_ARRAY[$idx]})"
-                ((i++))
-            done
-            read -p "Select Data Stores to associate (comma-separated numbers, e.g. 1,3) [Enter to skip]: " APP_DS_SEL
-            
-            if [[ -n "$APP_DS_SEL" ]]; then
-                IFS=',' read -ra SELECTED_INDICES <<< "$APP_DS_SEL"
-                SELECTED_DS_LIST=()
-                for index in "${SELECTED_INDICES[@]}"; do
-                    index=$(echo "$index" | xargs)
-                    if [[ "$index" =~ ^[0-9]+$ ]] && (( index >= 1 && index <= ${#DS_ID_ARRAY[@]} )); then
-                        SELECTED_DS_LIST+=("${DS_ID_ARRAY[$((index-1))]}")
-                    fi
-                done
-                if [[ ${#SELECTED_DS_LIST[@]} -gt 0 ]]; then
-                    SELECTED_IDS=$(IFS=,; echo "${SELECTED_DS_LIST[*]}")
-                fi
-            fi
-        fi
-        
-        APP_JSON=$(jq -n \
-            --arg id "$ENG_ID" \
-            --arg display "$APP_DISPLAY" \
-            --arg company "$APP_COMPANY" \
-            --arg ds "$SELECTED_IDS" \
-            --arg audit_logs "$ENABLE_AUDIT_LOGS_FLAG" \
-            '{engine_id: $id, display_name: $display, company_name: $company, data_stores: $ds, enable_audit_logs: $audit_logs}')
-        APP_LIST+=("$APP_JSON")
-        
-        echo ""
-        read -p "[PREVIEW] Do you want to create another Gemini Enterprise Application? [y/N]: " CREATE_APP
-        if [[ ! "$CREATE_APP" =~ ^[Yy]$ ]]; then
-            break
-        fi
-    done
-    
-    if [[ ${#APP_LIST[@]} -eq 0 ]]; then
+    if [[ "$APPS_OBJ" == "{}" ]]; then
          echo "No applications generated."
          pause
          return 0
     fi
 
-    # 2. Extract Workforce Identity Details
-    POOL_NAME=$(echo "$STATE_CONTENT" | jq -r '.outputs.acl_workforce_pool_name.value // empty')
-    PROVIDER_ID=$(echo "$STATE_CONTENT" | jq -r '.outputs.acl_workforce_provider_id.value // empty')
-    
-    # Check IdP Type for debugging/validation
-    IDP_TYPE=$(echo "$STATE_CONTENT" | jq -r '.outputs.acl_idp_type.value // empty')
-
-    if [[ "$IDP_TYPE" == "THIRD_PARTY" ]]; then
-        if [[ -z "$POOL_NAME" || -z "$PROVIDER_ID" ]]; then
-             echo -e "${RED}Error: Third Party IdP selected but Pool/Provider details missing in state.${NC}"
-             echo "Please ensure Stage 0 was deployed with Third Party configuration."
-        fi
-    fi
-    
-    WIF_ARGS=""
-    if [[ -n "$POOL_NAME" && -n "$PROVIDER_ID" ]]; then
-        # Extract Pool ID from full name (locations/global/workforcePools/POOL_ID)
-        POOL_ID=$(basename "$POOL_NAME")
-        WIF_ARGS="--workforce-pool-id $POOL_ID --workforce-provider-id $PROVIDER_ID"
-    fi
+    # Write the variables to terraform.tfvars
+    strip_gemini_apps_tfvars gemini-stage-0/terraform.tfvars
+    echo "gemini_apps = ${APPS_OBJ}" >> gemini-stage-0/terraform.tfvars
 
     export GOOGLE_CLOUD_PROJECT="${PROJECT_ID}"
     export GOOGLE_CLOUD_QUOTA_PROJECT="${PROJECT_ID}"
 
     echo ""
-    echo "Executing Application Configurations..."
+    echo -e "${BLUE}Applying application configurations via Terraform...${NC}"
     
-    # Iterate apps
-    for APP_JSON in "${APP_LIST[@]}"; do
-        
-        ENG_ID=$(echo "$APP_JSON" | jq -r '.engine_id')
-        DISP_NAME=$(echo "$APP_JSON" | jq -r '.display_name')
-        COMP_NAME=$(echo "$APP_JSON" | jq -r '.company_name')
-        DS_KEYS=$(echo "$APP_JSON" | jq -r '.data_stores // empty')
-        
-        CMD="gem4gov app create --project-id \"${PROJECT_ID}\" --engine-id \"${ENG_ID}\" --display-name \"${DISP_NAME}\" --company-name \"${COMP_NAME}\""
-        
-        ENABLE_AUDIT_LOGS=$(echo "$APP_JSON" | jq -r '.enable_audit_logs // "false"')
-        if [[ "$ENABLE_AUDIT_LOGS" == "true" ]]; then
-            CMD="$CMD --enable-audit-logs"
-        fi
-        
-        if [[ -n "$COMPLIANCE_REGIME" && "$COMPLIANCE_REGIME" != "NONE" ]]; then
-            CMD="$CMD --compliance-regime \"${COMPLIANCE_REGIME}\""
-        fi
-        
-        if [[ -n "$DS_KEYS" && "$DS_KEYS" != "null" && "$DS_KEYS" != "\"\"" ]]; then
-             CMD="$CMD --data-stores \"${DS_KEYS}\""
-        fi
-        
-        if [[ -n "$WIF_ARGS" ]]; then
-            CMD="$CMD $WIF_ARGS"
-        fi
-        
-        echo -e "${BLUE}Creating Application: ${DISP_NAME} (${ENG_ID})...${NC}"
-        echo "Running: $CMD"
-        if ! eval "$CMD"; then
-             echo -e "${RED}Error: Failed to create Application ${DISP_NAME}. Aborting.${NC}"
-             pause
-             return 1
-        fi
-        echo ""
-    done
+    cd gemini-stage-0
     
-    echo -e "${GREEN}Gemini Enterprise Applications configured.${NC}"
+    # Initialize again in case something changed (safe step)
+    if ! terraform init -migrate-state -backend-config="bucket=${BUCKET_NAME}" -backend-config="prefix=terraform/state/stage-0"; then
+        echo -e "${RED}Terraform Init failed! Please try resolving the error and running the Step again.${NC}"
+        cd ..
+        pause
+        return 1
+    fi
+    
+    if ! terraform apply -var-file="terraform.tfvars" -auto-approve; then
+         echo -e "${RED}Error: Failed to apply Application Configurations via Terraform. Aborting.${NC}"
+         cd ..
+         pause
+         return 1
+    fi
+    
+    cd ..
+    
+    echo -e "${GREEN}Gemini Enterprise Applications configured and deployed successfully.${NC}"
 
     echo ""
     echo -e "${YELLOW}IMPORTANT NEXT STEPS:${NC}"
-    echo -e "1. Take note of the ${GREEN}Gemini Enterprise Widget Config ID${NC} from the output above for the configuration of the Load Balancer.${NC}"
-    echo -e "2. Setup DNS A Record that points the desired Gemini Enterprise subdomain (i.e. gemini.yourdomain.com) to the provisioned Load Balancer IP address (${GEMINI_IP})."
-    echo -e "3. Provision an SSL Certificate and upload it to Google Cloud Certificate Manager (${YELLOW}Helper Functions > Upload SSL Certificate${NC})."
-    echo -e "4. From the Main Menu select ${BLUE}Step 3 - Configure & Deploy Load Balancer / Access Policies (gemini-stage-1)${NC}."
+    echo -e "1. Setup DNS A Record that points the desired Gemini Enterprise subdomain (i.e. gemini.yourdomain.com) to the provisioned Load Balancer IP address (${GEMINI_IP})."
+    echo -e "2. Provision an SSL Certificate and upload it to Google Cloud Certificate Manager (${YELLOW}Helper Functions > Upload SSL Certificate${NC})."
+    echo -e "3. From the Main Menu select ${BLUE}Step 3 - Configure & Deploy Load Balancer / Access Policies (gemini-stage-1)${NC}."
     pause
 }
 
@@ -2802,7 +2937,7 @@ upload_ssl_certificate() {
 
 replace_gemini_app() {
     echo -e "${BLUE}--- Replace Gemini Enterprise Application / Load Balancer Routing ---${NC}"
-    echo -e "${RED}WARNING: This will create a NEW Gemini Enterprise Application and update the Load Balancer to route traffic to it.${NC}"
+    echo -e "${RED}WARNING: This will configure a NEW Gemini Enterprise Application and update the Load Balancer to route traffic to it.${NC}"
     echo -e "${YELLOW}The old application will NOT be deleted automatically.${NC}"
     echo ""
     read -p "Are you sure you want to proceed? (y/N): " CONFIRM
@@ -2810,17 +2945,12 @@ replace_gemini_app() {
         return 0
     fi
 
-    # 1. Create new App
-    configure_gem4gov || return 1
+    # 1. Configure and Deploy the new App (Stage 0)
+    configure_gemini_apps || return 1
 
     # 2. Update Networking (Stage 1)
     echo ""
-    echo -e "${YELLOW}IMPORTANT: When prompted to 'Reuse existing configuration' for Stage 1, answer 'n' (No).${NC}"
-    echo -e "${YELLOW}You MUST enter the NEW Gemini Enterprise Widget Config ID from the previous step.${NC}"
-    echo ""
-    pause
-
-    configure_stage_1 || return 1
+    echo -e "${YELLOW}Deploying Stage 1 to update Load Balancer routing...${NC}"
     deploy_stage_1
 }
 
@@ -3874,15 +4004,11 @@ configure_stage_1() {
         fi
     fi
 
-    read -p "Enter Gemini Widget Config ID (from Step 2 output): " GEMINI_CONFIG_ID
-    
     cat > gemini-stage-1/terraform.tfvars <<EOF
 stage_0_state_bucket = "${BUCKET_NAME}"
 gemini_enterprise_domain = "${GEMINI_DOMAIN}"
 ssl_certificate_name = "${SSL_CERT_NAME}"
-gemini_config_id = "${GEMINI_CONFIG_ID}"
 cert_management_choice = "${CERT_MANAGEMENT_CHOICE}"
-custom_domain = "${CUSTOM_DOMAIN}"
 EOF
 
     # Add Shared VPC vars if needed (simple check)
@@ -3993,19 +4119,18 @@ main_menu() {
         echo -e "Current Project: ${YELLOW}${PROJECT_ID:-None}${NC}"
         echo -e "Deployment Topology: ${YELLOW}${DEPLOYMENT_TYPE_TEXT:-None}${NC}"
         echo "-----------------------------------"
-        echo -e "1. ${BLUE}Step 1${NC} - Configure & Deploy Infrastructure (gemini-stage-0)"
-        echo -e "2. ${BLUE}Step 2${NC} - Create Gemini Enterprise App (gem4gov-cli)"
-        echo -e "3. ${BLUE}Step 3${NC} - Configure & Deploy Load Balancer / Access Policies (gemini-stage-1)"
-        echo -e "4. ${YELLOW}Helper Functions${NC}"
-        echo -e "5. ${YELLOW}Re-select Deployment Topology / Project${NC}"
-        echo -e "6. ${RED}Exit${NC}"
+        echo -e "1. ${BLUE}Step 1${NC} - Configure & Deploy Stage 0 (Infrastructure & Apps)"
+        echo -e "2. ${BLUE}Step 2${NC} - Configure & Deploy Stage 1 (Load Balancer & Access Policies)"
+        echo -e "3. ${YELLOW}Helper Functions${NC}"
+        echo -e "4. ${YELLOW}Re-select Deployment Topology / Project${NC}"
+        echo -e "5. ${RED}Exit${NC}"
         echo "-----------------------------------"
-        read -p "Select an option [1-6]: " OPTION
-
+        read -p "Select an option [1-5]: " OPTION
+ 
         case $OPTION in
             1)
                 if [[ -z "$PROJECT_ID" ]]; then
-                    echo -e "${RED}Please select a project first (Option 5).${NC}"
+                    echo -e "${RED}Please select a project first (Option 4).${NC}"
                     pause
                     continue
                 fi
@@ -4014,31 +4139,23 @@ main_menu() {
                 ;;
             2)
                 if [[ -z "$PROJECT_ID" ]]; then
-                    echo -e "${RED}Please select a project first (Option 5).${NC}"
-                    pause
-                    continue
-                fi
-                configure_gem4gov || continue
-                ;;
-            3)
-                if [[ -z "$PROJECT_ID" ]]; then
-                    echo -e "${RED}Please select a project first (Option 5).${NC}"
+                    echo -e "${RED}Please select a project first (Option 4).${NC}"
                     pause
                     continue
                 fi
                 configure_stage_1 || continue
                 deploy_stage_1 || continue
                 ;;
-            4)
+            3)
                 helper_menu || continue
                 ;;
-            5)
+            4)
                 auth_and_project_setup || continue
                 enable_apis || continue
                 select_deployment_type || continue
                 discover_infrastructure || continue
                 ;;
-            6)
+            5)
                 echo "Exiting..."
                 exit 0
                 ;;
