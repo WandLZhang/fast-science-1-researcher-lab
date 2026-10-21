@@ -119,7 +119,7 @@ Each researcher project gets:
 ```bash
 cd fast/stages-aw/1-resman
 
-# <prefix> is the prefix you chose during L0 Stage 0 setup (e.g., "wzuniv", "univ")
+# <prefix> is the prefix you chose during L0 Stage 0 setup (e.g., "univ")
 # The outputs bucket follows the naming convention: <prefix>-prod-iac-core-outputs-0
 ../../stage-links.sh gs://<prefix>-prod-iac-core-outputs-0
 # Copy and paste the output commands
@@ -141,7 +141,7 @@ team_folders = {
   }
   medicine = {
     descriptive_name            = "School of Medicine"
-    iam_by_replicas             = {}  # fill in
+    iam_by_principals           = {}  # fill in
     impersonation_principals    = ["group:gcp-som-admins@yourdomain.edu"]
     department_admin_principals = ["group:gcp-som-admins@yourdomain.edu"]
     dev_org_policies_preset     = "sandbox"
@@ -259,12 +259,12 @@ This creates:
     ├── Billing linked
     ├── Connected to L0 network (Cloud NAT for internet)
     ├── Logging + monitoring enabled
-    ├── 11 APIs pre-enabled (compute, AI platform, batch, notebooks, ...)
+    ├── 24 APIs pre-enabled (compute, AI platform, notebooks, ...)
     ├── Service account with log/metric write permissions
     └── Labels: department, researcher, cost-center
 ```
 
-> **📋 Update Deployment Map:** L1 project factory is complete. In the Deployment Map diagram above, change nodes **PF** and **RP1** from `⏳ Planned` to `✅ Deployed`. Change their styles from dashed gray to solid: PF/RP1 → `fill:#f3e5f5,stroke:#6a1b9a`. Replace `PREFIX-dept-researcher` with the actual project name.
+> **📋 Update Deployment Map:** L1 project factory is complete. In the Deployment Map diagram above, change node **RP1** from `⏳ IT (PF) or PIs (Console)` to `✅ Deployed`. Change its style from dashed gray to solid: RP1 → `fill:#f3e5f5,stroke:#6a1b9a`. Replace `researcher projects` with the actual project name.
 
 ### Step 5 — Hand off to researcher
 
