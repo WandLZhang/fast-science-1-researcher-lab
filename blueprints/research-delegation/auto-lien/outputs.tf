@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 output "function_name" {
   value       = google_cloudfunctions2_function.auto_lien.name
   description = "Name of the deployed Cloud Function."
@@ -10,7 +26,7 @@ output "function_uri" {
 
 output "service_account_email" {
   value       = google_service_account.lien_orchestrator.email
-  description = "Identity the function runs as. Holds lienModifier on the Teams folder."
+  description = "Identity the function runs as. Holds lienModifier on each department folder."
 }
 
 output "pubsub_topic" {

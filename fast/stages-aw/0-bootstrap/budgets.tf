@@ -17,7 +17,10 @@
 # tfdoc:file:description Billing budgets.
 
 locals {
-  folder_name = var.assured_workloads.regime != "COMPLIANCE_REGIME_UNSPECIFIED" ? "${google_assured_workloads_workload.primary[0].display_name}" : "${module.no-compliance-folder[0].folder.name}"
+  # Upstream referenced module.no-compliance-folder, which this fork replaced
+  # with module.managed-folder. Both regimes resolve to the same display name,
+  # which local.managed_folder_name already computes in main.tf.
+  folder_name = local.managed_folder_name
 }
 
 module "billing-account-budget" {

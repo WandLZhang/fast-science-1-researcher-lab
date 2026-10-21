@@ -8,11 +8,36 @@ billing_account = {
 #   amount = 1000
 # }
 
-# region configuration - this will automatically populate locations for GCS, BigQuery, KMS, and logging buckets
-# Default to us-east4 for IL5/FedRAMP High/Moderate compliance - adjust as needed
+# Compute region. Drives KMS keyring location and log sink location by default.
+# Default to us-east4 for IL5/FedRAMP High/Moderate compliance — adjust as needed.
 regions = {
-  primary = "<region>"
+  primary = "us-east4"  # Change to your preferred region
 }
+
+# Optional override for the top-level managed folder name. Default:
+# "it-services" for unspecified regime; lowercased regime short code
+# (e.g., "il5", "frh") for compliance regimes.
+# managed_folder_name = "it-services"
+
+# Optional override for the org-level tag key used by L1 for folder-scoped
+# org-policy admin delegation. Default "department" works for universities
+# (schools/departments), federal agencies (centers), and
+# corporate divisions. L1 creates one tag value per team_folders entry and
+# binds it to the corresponding department folder.
+# department_tag_key_name = "department"
+
+# Optional override for bucket / dataset / keyring locations.
+# Defaults: GCS=US, BQ=US (multi-region); logging=global → falls back to regions.primary;
+# KMS=null → falls back to regions.primary (KMS requires a regional location or a
+# lowercase multi-region like "us"/"europe", NOT the uppercase "US" used by GCS/BQ).
+# Uncomment to override:
+# locations = {
+#   bq      = "US"
+#   gcs     = "US"
+#   logging = "global"
+#   pubsub  = []
+#   kms     = "us-east4"   # or "us" for multi-region; do NOT use "US"
+# }
 
 # use `gcloud organizations list`
 organization = {
@@ -57,6 +82,32 @@ log_sinks = {
 
 org_policies_config = {
   import_defaults = false # No policies to import as of 27 SEP 2024
+  # Brownfield orgs: list the org policies your organization already has (for
+  # example from Google Cloud Setup or Foundation Builder). The second apply
+  # imports them instead of failing with ALREADY_EXISTS, then sets them to this
+  # stage's values. List them with:
+  #   gcloud org-policies list --organization=<organization_id> --format='value(name.basename())'
+  # Constraints this stage doesn't manage are skipped with a warning. The example
+  # is the Foundation Builder baseline from github.com/google/skills, minus
+  # compute.restrictXpnProjectLienRemoval, which this stage doesn't set.
+  # import_existing = [
+  #   "compute.disableNestedVirtualization",
+  #   "compute.disableSerialPortAccess",
+  #   "compute.disableVpcExternalIpv6",
+  #   "compute.requireOsLogin",
+  #   "compute.restrictProtocolForwardingCreationForTypes",
+  #   "compute.setNewProjectDefaultToZonalDNSOnly",
+  #   "compute.vmExternalIpAccess",
+  #   "essentialcontacts.allowedContactDomains",
+  #   "iam.allowedPolicyMemberDomains",
+  #   "iam.automaticIamGrantsForDefaultServiceAccounts",
+  #   "iam.disableServiceAccountKeyCreation",
+  #   "iam.disableServiceAccountKeyUpload",
+  #   "sql.restrictAuthorizedNetworks",
+  #   "sql.restrictPublicIp",
+  #   "storage.publicAccessPrevention",
+  #   "storage.uniformBucketLevelAccess",
+  # ]
   constraints = {
     allowed_policy_member_domains = [] #Update with additional customer IDs if needed
   }

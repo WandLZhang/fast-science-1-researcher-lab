@@ -14,6 +14,19 @@ subnets = {
         flow_sampling        = 1
         metadata             = "INCLUDE_ALL_METADATA"
       }
+    },
+    # Secondary-region landing subnet. Multi-region NVA deployments need this;
+    # single-region deployments can delete it. Set region to your secondary.
+    {
+      name          = "landing-default-secondary"
+      ip_cidr_range = "10.65.0.0/24"
+      region        = "us-west1"
+      description   = "Landing subnet for NVA appliances in secondary region"
+      flow_logs_config = {
+        aggregation_interval = "INTERVAL_5_SEC"
+        flow_sampling        = 1
+        metadata             = "INCLUDE_ALL_METADATA"
+      }
     }
   ]
   dmz = [
@@ -22,6 +35,17 @@ subnets = {
       ip_cidr_range = "10.64.128.0/24"
       region        = "us-central1"
       description   = "Default subnet for landing dmz in primary region"
+      flow_logs_config = {
+        aggregation_interval = "INTERVAL_5_SEC"
+        flow_sampling        = 1
+        metadata             = "INCLUDE_ALL_METADATA"
+      }
+    },
+    {
+      name          = "dmz-default-secondary"
+      ip_cidr_range = "10.65.128.0/24"
+      region        = "us-west1"
+      description   = "DMZ subnet for NVA appliances in secondary region"
       flow_logs_config = {
         aggregation_interval = "INTERVAL_5_SEC"
         flow_sampling        = 1
@@ -41,6 +65,20 @@ subnets = {
         metadata             = "INCLUDE_ALL_METADATA"
       }
       tenant        = "ten-1" # Links this subnet to tenant-1 project sharing
+    },
+    # Secondary-region workload subnet. Gives research workloads capacity
+    # overflow and regional availability. Delete for single-region deployments.
+    {
+      name          = "prod-default-secondary"
+      ip_cidr_range = "10.203.0.0/16"
+      region        = "us-west1"
+      description   = "Default subnet for prod environment in secondary region"
+      flow_logs_config = {
+        aggregation_interval = "INTERVAL_5_SEC"
+        flow_sampling        = 1
+        metadata             = "INCLUDE_ALL_METADATA"
+      }
+      tenant        = "ten-1"
     },
     {
       name          = "prod-tenant-2-subnet"

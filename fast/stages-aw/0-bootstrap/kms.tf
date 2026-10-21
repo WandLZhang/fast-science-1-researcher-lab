@@ -68,8 +68,10 @@ module "gcs-kms" {
   source     = "../../../modules/kms"
   project_id = module.automation-project.project_id
 
+  # Upstream: used local.locations.gcs which can be "US" (multi-region).
+  # KMS requires a regional location, not multi-region. Use local.locations.kms.
   keyring = {
-    location = local.locations.gcs
+    location = local.locations.kms
     name     = "gcs"
   }
   keys = {
@@ -84,10 +86,10 @@ module "gcs-kms" {
       "serviceAccount:service-${module.automation-project.number}@gs-project-accounts.iam.gserviceaccount.com",
     ],
     "roles/cloudkms.admin" = [
-      "serviceAccount:${var.prefix}-prod-resman-0@${var.prefix}-prod-iac-core-0.iam.gserviceaccount.com"
+      module.automation-tf-resman-sa.iam_email
     ]
     "roles/cloudkms.viewer" = [
-      "serviceAccount:${var.prefix}-prod-resman-0r@${var.prefix}-prod-iac-core-0.iam.gserviceaccount.com"
+      module.automation-tf-resman-r-sa.iam_email
     ]
   }
 }

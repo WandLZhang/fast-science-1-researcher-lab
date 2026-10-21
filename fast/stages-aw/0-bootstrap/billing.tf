@@ -46,7 +46,7 @@ module "billing-export-project" {
   name                    = "billing-exp-0"
   default_service_account = "deprivilege"
   parent = coalesce(
-    var.project_parent_ids.billing, module.branch-common-services-folder.folder.name
+    var.project_parent_ids.billing, local.managed_folder_id
   )
   prefix = local.prefix
   contacts = (

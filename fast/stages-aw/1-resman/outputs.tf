@@ -143,6 +143,7 @@ locals {
       })
     )
   }
+  env_folder_ids = { for k, v in module.branch-envs-folders : k => try(v.folder.id, null) }
   folder_ids = merge(
     {
       data-platform-dev  = try(module.branch-dp-dev-folder[0].id, null)
@@ -154,7 +155,8 @@ locals {
       networking         = try(module.branch-network-folder.id, null)
       sandbox            = try(module.branch-sandbox-folder[0].id, null)
       security           = try(module.branch-security-folder.id, null)
-      teams              = var.assured_workloads.folder
+      teams              = try(module.branch-teams-folder[0].id, null)
+      envs               = try(local.env_folder_ids, null)
     },
     {
       for k, v in module.branch-teams-team-folder :
@@ -167,7 +169,8 @@ locals {
     {
       for k, v in module.branch-teams-team-prod-folder :
       "team-${k}-prod" => v.id
-    }
+    },
+    local.edu_folder_ids
   )
   providers_raw = merge(
     {
@@ -291,18 +294,24 @@ locals {
         sa     = module.branch-sandbox-sa[0].email
       }
     },
-    # Upstream v4.0.0 switched this from rendered templatefile strings to plain
-    # {bucket, name, sa} maps. Its "3-teams" entry is dropped here: this fork
-    # removed module.branch-teams-gcs and module.branch-teams-sa along with the
-    # Teams/ wrapper folder, so only the per-department entries exist.
-    !var.fast_features.teams ? {} : {
-      for k, v in module.branch-teams-team-sa :
-      "3-teams-${k}" => {
-        bucket = module.branch-teams-team-gcs[k].name
-        name   = "teams"
-        sa     = v.email
+    !var.fast_features.teams ? {} : merge(
+      {
+        "3-teams" = {
+          bucket = module.branch-teams-gcs[0].name
+          name   = "teams"
+          sa     = module.branch-teams-sa[0].email
+        }
+      },
+      {
+        for k, v in module.branch-teams-team-sa :
+        "3-teams-${k}" => {
+          bucket = module.branch-teams-team-gcs[k].name
+          name   = "teams"
+          sa     = v.email
+        }
       }
-    }
+    ),
+    local.edu_providers_raw
   )
   providers = {
     for k, v in local.providers_raw : k => templatefile(local._tpl_providers, merge(
@@ -336,10 +345,12 @@ locals {
       sandbox                = try(module.branch-sandbox-sa[0].email, null)
       security               = module.branch-security-sa.email
       security-r             = module.branch-security-r-sa.email
+      teams                  = try(module.branch-teams-sa[0].email, null)
     },
     {
       for k, v in module.branch-teams-team-sa : "team-${k}" => v.email
     },
+    local.edu_service_accounts,
   )
   team_cicd_workflows = {
     for k, v in local.team_cicd_repositories : k => templatefile(
@@ -360,12 +371,17 @@ locals {
       tf_var_files      = local.cicd_workflow_var_files.stage_3
     }
   }
+  tenant_accounts = { for k, v in local.tenant_envs : k => {
+    main_project    = module.tenant-self-main-projects[k].id
+    env             = v.env
+    tenant          = v.tenant
+    admin_principal = var.tenants[v.tenant].admin_principal
+  } }
   tfvars = {
     folder_ids       = local.folder_ids
+    envs_folders     = var.envs_folders
     service_accounts = local.service_accounts
-    # Upstream also emits tenant_accounts here. This fork deleted
-    # branch-tenants.tf when department folders moved to the org root, so
-    # local.tenant_accounts no longer exists.
+    tenant_accounts  = local.tenant_accounts
     billing_override = var.billing_override
   }
 }
@@ -384,20 +400,6 @@ output "cicd_repositories" {
   }
 }
 
-output "project_factories" {
-  description = "Data for the project factories stage."
-  value = !var.fast_features.project_factory ? {} : {
-    dev = {
-      bucket = module.branch-pf-dev-gcs[0].name
-      sa     = module.branch-pf-dev-sa[0].email
-    }
-    prod = {
-      bucket = module.branch-pf-prod-gcs[0].name
-      sa     = module.branch-pf-prod-sa[0].email
-    }
-  }
-}
-
 output "dataplatform" {
   description = "Data for the Data Platform stage."
   value = !var.fast_features.data_platform ? {} : {
@@ -412,6 +414,11 @@ output "dataplatform" {
       service_account = module.branch-dp-prod-sa[0].email
     }
   }
+}
+
+output "envs" {
+  description = "Environments folders created for the tenants."
+  value       = try(module.branch-envs-folders, null)
 }
 
 output "gcve" {
@@ -462,6 +469,20 @@ output "networking" {
     folder          = module.branch-network-folder.id
     gcs_bucket      = module.branch-network-gcs.name
     service_account = module.branch-network-sa.iam_email
+  }
+}
+
+output "project_factories" {
+  description = "Data for the project factories stage."
+  value = !var.fast_features.project_factory ? {} : {
+    dev = {
+      bucket = module.branch-pf-dev-gcs[0].name
+      sa     = module.branch-pf-dev-sa[0].email
+    }
+    prod = {
+      bucket = module.branch-pf-prod-gcs[0].name
+      sa     = module.branch-pf-prod-sa[0].email
+    }
   }
 }
 

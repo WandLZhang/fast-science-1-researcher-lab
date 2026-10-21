@@ -59,6 +59,13 @@ module "env-spoke-projects" {
       try(local.service_accounts["gke-${lower(each.key)}"], null),
       try(local.service_accounts["project-factory-${lower(each.key)}"], null),
     ])
+    # Grant PF SA serviceProjectNetworkAdmin on spoke host so L1 project
+    # factory can attach service projects and grant subnet-level IAM
+    # (compute.networkUser) to service agents for L2 workloads
+    (local.custom_roles.service_project_network_admin) = compact([
+      try(local.service_accounts.project-factory-dev, null),
+      try(local.service_accounts.project-factory-prod, null),
+    ])
   }
   #   # allow specific service accounts to assign a set of roles
   #   iam_bindings = {

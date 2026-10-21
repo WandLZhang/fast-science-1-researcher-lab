@@ -11,8 +11,8 @@
 # blueprints/research-delegation/auto-lien/main.tf
 #
 # Org-wide Cloud Function that auto-attaches a deletion lien to every project
-# created under the Teams folder subtree. Catches projects created via the
-# Console (which bypass the L1 Project Factory and its built-in lien_reason).
+# created under a department folder. Catches projects created via the
+# Console (which bypass the project factory and its built-in lien_reason).
 #
 # Topology:
 #   Org-level Aggregated Log Sink  →  Pub/Sub topic (in CF project)
@@ -27,7 +27,7 @@
 #     -var "project_id=<PREFIX>-prod-iac-core-0"
 #     -var "region=us-central1"
 #     -var "organization_id=NNNNNNNNNNNN"
-#     -var "teams_folder_id=NNNNNNNNNNNN"
+#     -var 'department_folder_ids=["NNNNNNNNNNNN","NNNNNNNNNNNN"]'
 #     -var "lien_reason=Research project — contact IT to delete"
 
 terraform {
@@ -37,6 +37,12 @@ terraform {
     google-beta = { source = "hashicorp/google-beta", version = ">= 5.30" }
     archive     = { source = "hashicorp/archive",     version = ">= 2.4" }
   }
+}
+
+locals {
+  department_folder_ids = toset([
+    for id in var.department_folder_ids : trimprefix(id, "folders/")
+  ])
 }
 
 provider "google" {
@@ -74,23 +80,25 @@ resource "google_service_account" "lien_orchestrator" {
   project      = var.project_id
   account_id   = "auto-lien-orchestrator"
   display_name = "Auto-lien orchestrator (research-delegation blueprint)"
-  description  = "Runs the auto-lien Cloud Function. Has lienModifier on the Teams folder."
+  description  = "Runs the auto-lien Cloud Function. Has lienModifier on each department folder."
 }
 
-# Lien-modifier on the Teams folder so the SA can create liens on any project
-# in the subtree. Cascades to all team subfolders.
-resource "google_folder_iam_member" "lien_modifier_on_teams" {
-  folder = "folders/${var.teams_folder_id}"
-  role   = "roles/resourcemanager.lienModifier"
-  member = "serviceAccount:${google_service_account.lien_orchestrator.email}"
+# Lien-modifier on each department folder so the SA can create liens on any
+# project in the subtree. Cascades to the Development and Production folders.
+resource "google_folder_iam_member" "lien_modifier_on_departments" {
+  for_each = local.department_folder_ids
+  folder   = "folders/${each.key}"
+  role     = "roles/resourcemanager.lienModifier"
+  member   = "serviceAccount:${google_service_account.lien_orchestrator.email}"
 }
 
 # Folder Viewer so the SA can read project ancestry to confirm the new project
-# really is under the Teams folder before attaching a lien.
-resource "google_folder_iam_member" "folder_viewer_on_teams" {
-  folder = "folders/${var.teams_folder_id}"
-  role   = "roles/resourcemanager.folderViewer"
-  member = "serviceAccount:${google_service_account.lien_orchestrator.email}"
+# really is under a department folder before attaching a lien.
+resource "google_folder_iam_member" "folder_viewer_on_departments" {
+  for_each = local.department_folder_ids
+  folder   = "folders/${each.key}"
+  role     = "roles/resourcemanager.folderViewer"
+  member   = "serviceAccount:${google_service_account.lien_orchestrator.email}"
 }
 
 # Pub/Sub topic that receives CreateProject audit log events from the org sink.
@@ -100,9 +108,9 @@ resource "google_pubsub_topic" "project_created" {
 }
 
 # Org-level aggregated log sink. Captures CreateProject events from the entire
-# org and routes them to the Pub/Sub topic above. Filter scopes to events
-# whose target ancestor includes the Teams folder, so we don't lien projects
-# created elsewhere (e.g., Common Services, Networking).
+# org and routes them to the Pub/Sub topic above. The function checks each
+# project's ancestry, so projects created elsewhere (e.g., it-services,
+# Networking) don't get liens.
 resource "google_logging_organization_sink" "create_project" {
   name             = "auto-lien-create-project"
   org_id           = var.organization_id
@@ -174,9 +182,9 @@ resource "google_cloudfunctions2_function" "auto_lien" {
     all_traffic_on_latest_revision = true
 
     environment_variables = {
-      TEAMS_FOLDER_ID = var.teams_folder_id
-      LIEN_REASON     = var.lien_reason
-      ORG_ID          = var.organization_id
+      DEPARTMENT_FOLDER_IDS = join(",", sort(local.department_folder_ids))
+      LIEN_REASON           = var.lien_reason
+      ORG_ID                = var.organization_id
     }
   }
 

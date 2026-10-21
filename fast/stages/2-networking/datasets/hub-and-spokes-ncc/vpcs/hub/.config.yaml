@@ -18,3 +18,6 @@ routes:
     next_hop: "default-internet-gateway"
 factories_config:
   vlan_attachments: "none"
+  # vpns/onprem.yaml is a sample HA VPN with a placeholder peer and secret.
+  # Edit it, then remove this line to create it.
+  vpns: "none"

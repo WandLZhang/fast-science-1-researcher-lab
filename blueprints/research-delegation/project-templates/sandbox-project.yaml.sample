@@ -6,10 +6,10 @@
 # Defaults are loose: public IPs allowed, default VPC permitted, OS Login not
 # required, no service-allowlist, no lien (so the project can be deleted
 # easily when the experiment is over). Per-project org-policy OVERRIDES below
-# explicitly loosen the constraints inherited from the Teams folder baseline.
+# explicitly loosen the constraints inherited from the department baseline.
 #
 # To create a sandbox project:
-#   1. Copy this file into the L1 PF data dir:
+#   1. Copy this file into the project factory data dir:
 #        cp blueprints/research-delegation/project-templates/sandbox-project.yaml.sample \
 #           fast/stages-aw/3-project-factory-prod/data/projects/<dept>-<pi>-sandbox.yaml
 #   2. Replace every <PLACEHOLDER>.
@@ -21,9 +21,9 @@
 # The filename (without .yaml) becomes the project name suffix:
 #   <dept>-<pi>-sandbox.yaml → creates project: <prefix>-<dept>-<pi>-sandbox
 
-# Place the project under the PI's subfolder (or the department folder if no
-# PI subfolders are in use). Find the folder ID with:
-#   gcloud resource-manager folders list --folder=<TEAMS_FOLDER_ID>
+# Place the project under the PI's subfolder (or the department's Development
+# folder if no PI subfolders are in use). Find the folder ID with:
+#   gcloud resource-manager folders list --folder=<DEPARTMENT_FOLDER_ID>
 parent: folders/<DEPT_OR_PI_FOLDER_ID>
 
 # Master institution billing account
@@ -59,10 +59,11 @@ services:
   - pubsub.googleapis.com
   - workflows.googleapis.com
 
-# Per-project org-policy OVERRIDES that loosen the Teams folder baseline.
+# Per-project org-policy OVERRIDES that loosen the department baseline.
 # Each override applies only to this project and does not affect siblings.
-# These work because the PI / dept admin group has roles/orgpolicy.policyAdmin
-# at the team folder level (granted in ../team-folders/team-folders.example.tfvars).
+# Whoever applies this file needs roles/orgpolicy.policyAdmin: IT's
+# organization admins, or the department's department_admin_principals
+# (tag-conditioned grant from ../departments/departments.example.tfvars).
 org_policies:
 
   # Allow public IPs on VMs — handy for testing internet-facing services.

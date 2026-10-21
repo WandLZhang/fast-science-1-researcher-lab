@@ -37,7 +37,7 @@ variable "context" {
 variable "factories_config" {
   description = "Configuration for the resource factories or external data."
   type = object({
-    dataset = optional(string, "datasets/hub-and-spokes-peerings")
+    dataset = optional(string, "datasets/hub-and-spokes-ncc")
     paths = optional(object({
       defaults              = optional(string, "defaults.yaml")
       dns                   = optional(string, "dns/zones")

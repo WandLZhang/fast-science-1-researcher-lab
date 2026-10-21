@@ -148,10 +148,9 @@ variable "fast_features" {
     data_platform   = optional(bool, false)
     gcve            = optional(bool, false)
     gke             = optional(bool, false)
-    project_factory = optional(bool, false)
+    project_factory = optional(bool, true)
     sandbox         = optional(bool, false)
-    teams           = optional(bool, false)
-    envs            = optional(bool, false)
+    teams           = optional(bool, true)
   })
   default  = {}
   nullable = false
@@ -225,20 +224,33 @@ variable "iam_by_principals" {
   nullable    = false
 }
 
+variable "managed_folder_name" {
+  description = "Display name for the top-level managed folder. Defaults: \"it-services\" for COMPLIANCE_REGIME_UNSPECIFIED (regular folder at org root); regime short code (\"il5\", \"frh\") for compliance regimes (the AW workload folder itself). Override to rename — note that changing this after deployment renames the GCP folder but never forces recreation (display_name is in lifecycle.ignore_changes for the AW workload)."
+  type        = string
+  default     = null
+}
+
+variable "department_tag_key_name" {
+  description = "Short name of the org-level tag key used by L1 to scope folder-level org-policy admin delegation. Default \"department\" covers university schools/departments, federal-agency centers, and corporate divisions. Each L1 team_folders entry creates a tag value (= the entry's map key) under this key and binds it to the department folder; the department's admin group gets roles/orgpolicy.policyAdmin at org level with IAM condition resource.matchTag(\"<ORG>/<key>\", \"<value>\"), giving them folder-scoped org-policy authority."
+  type        = string
+  default     = "department"
+}
+
 variable "kms_protection_level" {
-  description = "KMS protection level."
+  description = "KMS protection level. Null falls back to the regime-aware default in main.tf: SOFTWARE for FEDRAMP_MODERATE, HSM otherwise. Upstream ships this with no default, which makes it a required input (google/stellar-engine#231)."
   type        = string
   nullable    = true
+  default     = null
 }
 
 variable "locations" {
-  description = "Optional locations for GCS, BigQuery, and logging buckets created here."
+  description = "Optional locations for GCS, BigQuery, logging buckets, and KMS keyrings. KMS defaults to var.regions.primary (regional) for backwards compatibility — set explicitly to a multi-region (lowercase, e.g. \"us\", \"europe\") only if your GCS/BQ resources are also multi-region and need a multi-region key."
   type = object({
     bq      = optional(string, "US")
     gcs     = optional(string, "US")
     logging = optional(string, "global")
     pubsub  = optional(list(string), [])
-    kms     = optional(string, "US")
+    kms     = optional(string)
   })
   nullable = false
   default  = {}
@@ -296,12 +308,13 @@ variable "logging_kms_key" {
 }
 
 variable "org_policies_config" {
-  description = "Organization policies customization."
+  description = "Organization policies customization. import_existing lists org policies that already exist on the organization (for example from Google Cloud Setup or Foundation Builder), so the stage imports them instead of failing with ALREADY_EXISTS."
   type = object({
     constraints = optional(object({
       allowed_policy_member_domains = optional(list(string), [])
     }), {})
     import_defaults = optional(bool, false)
+    import_existing = optional(list(string), [])
     tag_name        = optional(string, "org-policies")
     tag_values = optional(map(object({
       description = optional(string, "Managed by the Terraform organization module.")

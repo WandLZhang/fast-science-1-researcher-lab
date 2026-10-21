@@ -122,13 +122,16 @@ module "vdss-firewall" {
 
 # NAT
 
-module "dmz-nat-primary" {
+# Upstream: NAT only in primary region (dmz-nat-primary, no for_each).
+# Changed to per-region NAT so secondary NVAs can reach the internet.
+module "dmz-nat" {
   source         = "../../../modules/net-cloudnat"
+  for_each       = var.regions
   project_id     = module.vdss-host-project.project_id
-  region         = var.regions.primary
-  name           = "nat-${var.regions.primary}"
+  region         = each.value
+  name           = "nat-${each.value}"
   router_create  = true
-  router_name    = "prod-nat-${var.regions.primary}"
+  router_name    = "prod-nat-${each.value}"
   router_network = module.dmz-vpc.name
 }
 

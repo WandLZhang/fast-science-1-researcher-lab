@@ -28,7 +28,12 @@ locals {
       additive      = []
     }
   }
-  # human (groups) IAM bindings
+  # Upstream: human (groups) IAM bindings used authoritative bindings.
+  # Changed to ALL ADDITIVE to prevent terraform destroy from emptying
+  # org-level roles and locking out admins. Authoritative bindings
+  # (google_organization_iam_binding) set EXACT members — destroy empties
+  # the role entirely. Additive bindings (google_organization_iam_member)
+  # only manage one member — destroy removes just that member.
   iam_principal_bindings = {
     (local.principals.gcp-billing-admins) = {
       authoritative = []
@@ -39,31 +44,29 @@ locals {
       )
     }
     (local.principals.gcp-vpc-network-admins) = {
-      authoritative = [
+      authoritative = []
+      additive = [
         "roles/cloudasset.owner",
         "roles/cloudsupport.techSupportEditor",
-      ]
-      additive = [
         "roles/compute.orgFirewallPolicyAdmin",
         "roles/compute.xpnAdmin"
       ]
     }
     (local.principals.gcp-organization-admins) = {
-      authoritative = [
-        "roles/axt.admin",
-        "roles/cloudasset.owner",
-        "roles/cloudsupport.admin",
-        "roles/resourcemanager.folderAdmin",
-        "roles/resourcemanager.organizationAdmin",
-        "roles/resourcemanager.projectCreator",
-        "roles/resourcemanager.tagAdmin",
-        "roles/iam.workforcePoolAdmin",
-        "roles/assuredworkloads.admin"
-      ]
+      authoritative = []
       additive = concat(
         [
-          "roles/orgpolicy.policyAdmin",
-          "roles/iam.organizationRoleAdmin"
+          "roles/axt.admin",
+          "roles/cloudasset.owner",
+          "roles/cloudsupport.admin",
+          "roles/iam.organizationRoleAdmin",
+          "roles/resourcemanager.folderAdmin",
+          "roles/resourcemanager.organizationAdmin",
+          "roles/resourcemanager.projectCreator",
+          "roles/resourcemanager.tagAdmin",
+          "roles/iam.workforcePoolAdmin",
+          "roles/assuredworkloads.admin",
+          "roles/orgpolicy.policyAdmin"
         ],
         local.billing_mode != "org" ? [] : [
           "roles/billing.admin"
@@ -71,26 +74,25 @@ locals {
       )
     }
     (local.principals.gcp-security-admins) = {
-      authoritative = [
+      authoritative = []
+      additive = [
         "roles/cloudasset.owner",
         "roles/cloudsupport.techSupportEditor",
         "roles/iam.securityReviewer",
         "roles/logging.admin",
         "roles/securitycenter.admin",
-      ]
-      additive = [
         "roles/accesscontextmanager.policyAdmin",
         "roles/iam.organizationRoleAdmin",
         "roles/orgpolicy.policyAdmin"
       ]
     }
     (local.principals.gcp-support) = {
-      authoritative = [
+      authoritative = []
+      additive = [
         "roles/cloudsupport.techSupportEditor",
         "roles/logging.viewer",
         "roles/monitoring.viewer",
       ]
-      additive = []
     }
   }
   # machine (service accounts) IAM bindings, in logical format

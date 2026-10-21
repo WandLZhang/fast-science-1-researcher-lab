@@ -155,10 +155,10 @@ locals {
 
 # TODO: add a check block to ensure our custom roles exist in the factory files
 
-# import org policy constraints enabled by default in new orgs since February 2024
-import {
-  for_each = (
-    var.org_policies_config.import_defaults && var.bootstrap_user == null
+locals {
+  # import org policy constraints enabled by default in new orgs since February 2024
+  _org_policies_import_defaults = (
+    var.org_policies_config.import_defaults
     ? toset([
       # source: https://cloud.google.com/resource-manager/docs/secure-by-default-organizations#organization_policies_enforced_on_organization_resources
       # listed in the order as on page
@@ -171,10 +171,36 @@ import {
       "storage.uniformBucketLevelAccess",
       # "compute.setNewProjectDefaultToZonalDNSOnly",
       "compute.managed.restrictProtocolForwardingCreationForTypes", # not confirmed that this is live, but listed on webpage
-    ]) : toset([])
+    ])
+    : toset([])
   )
-  id = "organizations/${var.organization.id}/policies/${each.key}"
-  to = module.organization.google_org_policy_policy.default[each.key]
+  # Brownfield orgs: policies that already exist (for example from Google
+  # Cloud Setup or Foundation Builder). Only constraints this stage manages
+  # can be imported; the check below warns about the rest.
+  _org_policies_import_existing = toset(var.org_policies_config.import_existing)
+  org_policies_import = (
+    var.bootstrap_user == null
+    ? setintersection(
+      setunion(local._org_policies_import_defaults, local._org_policies_import_existing),
+      toset(keys(local.org_policies))
+    )
+    : toset([])
+  )
+}
+
+check "org_policies_import_existing" {
+  assert {
+    condition = length(setsubtract(
+      local._org_policies_import_existing, toset(keys(local.org_policies))
+    )) == 0
+    error_message = "org_policies_config.import_existing lists constraints this stage doesn't manage, so they're skipped: ${join(", ", sort(tolist(setsubtract(local._org_policies_import_existing, toset(keys(local.org_policies))))))}."
+  }
+}
+
+import {
+  for_each = local.org_policies_import
+  id       = "organizations/${var.organization.id}/policies/${each.key}"
+  to       = module.organization.google_org_policy_policy.default[each.key]
 }
 
 module "organization-logging" {
@@ -193,13 +219,13 @@ module "organization-logging" {
 resource "google_assured_workloads_workload" "primary" {
   count                        = var.assured_workloads.regime != "COMPLIANCE_REGIME_UNSPECIFIED" ? 1 : 0
   compliance_regime            = var.assured_workloads.regime
-  display_name                 = "StellarEngine-${var.prefix}"
+  display_name                 = local.managed_folder_name
   location                     = var.assured_workloads.location
   organization                 = var.organization.id
   billing_account              = var.billing_account.id != null && var.billing_account.id != "" ? "billingAccounts/${var.billing_account.id}" : null
   provisioned_resources_parent = ""
   resource_settings {
-    display_name  = "StellarEngine-${var.prefix}"
+    display_name  = local.managed_folder_name
     resource_type = "CONSUMER_FOLDER"
   }
 
@@ -207,40 +233,93 @@ resource "google_assured_workloads_workload" "primary" {
   depends_on                      = [module.organization-logging]
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [billing_account]
+    # Renames in code do NOT force AW folder recreation. The folder in GCP
+    # keeps its original display_name. Existing deployments stay stable.
+    ignore_changes = [billing_account, display_name, resource_settings]
   }
 }
 
-module "no-compliance-folder" {
+# Top-level wrapper folder for unspecified-regime deployments.
+# - With a compliance regime: NOT created — the AW workload folder above is
+#   the regime-bound wrapper.
+# - Without a regime: a regular folder at the org root (default name
+#   "it-services" per local.managed_folder_name in main.tf), which holds
+#   the L0 bootstrap projects, L1 school folders, networking, security, etc.
+module "managed-folder" {
   count      = var.assured_workloads.regime == "COMPLIANCE_REGIME_UNSPECIFIED" ? 1 : 0
   source     = "../../../modules/folder"
   parent     = module.organization-logging.id
-  name       = "StellarEngine-${var.prefix}"
+  name       = local.managed_folder_name
   depends_on = [module.organization-logging]
   logging_settings = {
     storage_location = local.locations.logging
   }
 }
 
+# Resolved IDs:
+# - managed_folder_id: where IT-managed infrastructure goes
+#   (bootstrap projects, Networking, Security). For unspecified regime:
+#   the it-services wrapper folder. For compliance: the AW workload folder.
+# - dept_folder_parent: where L1 department folders go.
+#   For unspecified regime: the ORGANIZATION ROOT (siblings to it-services).
+#   For compliance: the AW workload folder (so dept folders inherit the
+#   regime). The two are intentionally different for unspecified — IT stuff
+#   wraps under it-services for cleanliness; dept folders sit at the org
+#   root so each department is a visible top-level entity.
 locals {
-  assured_workload_folder = var.assured_workloads.regime != "COMPLIANCE_REGIME_UNSPECIFIED" ? (
-    try(
+  # Upstream v4.0.0 (#220): an AW workload returns several resources and
+  # resources[0] is not guaranteed to be the folder. Pick the CONSUMER_FOLDER
+  # explicitly, falling back to the old index for deployments that predate it.
+  assured_workload_folder = (
+    var.assured_workloads.regime != "COMPLIANCE_REGIME_UNSPECIFIED"
+    ? try(
       format("folders/%s", one([
         for r in google_assured_workloads_workload.primary[0].resources :
         r.resource_id if r.resource_type == "CONSUMER_FOLDER"
       ])),
       "folders/${google_assured_workloads_workload.primary[0].resources[0].resource_id}"
     )
-  ) : try(module.no-compliance-folder[0].folder.id, null)
+    : null
+  )
+  managed_folder_id = (
+    var.assured_workloads.regime != "COMPLIANCE_REGIME_UNSPECIFIED"
+    ? local.assured_workload_folder
+    : module.managed-folder[0].folder.name
+  )
+  dept_folder_parent = (
+    var.assured_workloads.regime != "COMPLIANCE_REGIME_UNSPECIFIED"
+    ? local.assured_workload_folder
+    : "organizations/${var.organization.id}"
+  )
 }
 
-module "branch-common-services-folder" {
-  source     = "../../../modules/folder"
-  parent     = local.assured_workload_folder
-  name       = "${lookup(var.regime_mapping, var.assured_workloads.regime, var.assured_workloads.regime)} Common Services"
-  depends_on = [module.organization-logging]
-  logging_settings = {
-    storage_location = local.locations.logging
+# Org-level tag key used by L1 to scope folder-level org-policy delegation.
+# Each L1 department folder gets a tag value under this key (= the team_folders
+# map entry's name, e.g., "engineering"), bound to the folder, and a
+# conditional org-level grant of roles/orgpolicy.policyAdmin to the
+# department's admin group with the IAM condition resource.matchTag(...).
+#
+# Per https://cloud.google.com/iam/docs/conditions-overview — the only
+# supported way to give folder-scoped org-policy authority since the
+# predefined orgpolicy.policyAdmin is org-scope only and the underlying
+# write permissions cannot be put in custom roles (verified empirically
+# on 2026-05-22).
+resource "google_tags_tag_key" "department" {
+  parent      = "organizations/${var.organization.id}"
+  short_name  = var.department_tag_key_name
+  description = "Tag key used by L1 (resman) to scope folder-level org-policy admin delegation via IAM conditions. Tag values = team_folders map keys (e.g., 'engineering', 'medicine')."
+}
+
+# Backwards-compat migration for deployments that previously had the
+# nested branch-common-services-folder wrapper (removed in 501c98580 and
+# the no-compliance-folder removed there too — but the no-compliance-folder
+# concept is being RE-ADDED as module.managed-folder above, so its removed{}
+# block must be deleted to avoid resurrecting a phantom delete).
+# branch-common-services-folder stays gone permanently.
+removed {
+  from = module.branch-common-services-folder
+  lifecycle {
+    destroy = false
   }
 }
 

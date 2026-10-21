@@ -42,7 +42,7 @@ module "log-export-project" {
   default_service_account = "deprivilege"
   lien_reason             = "Protected by default as a core project."
   parent = coalesce(
-    var.project_parent_ids.logging, module.branch-common-services-folder.folder.name
+    var.project_parent_ids.logging, local.managed_folder_id
   )
   prefix          = local.prefix
   billing_account = var.billing_account.id

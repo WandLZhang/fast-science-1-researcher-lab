@@ -10,7 +10,7 @@
 # the lien show up immediately at apply time, not after the next CF firing).
 #
 # To create a hardened project:
-#   1. Copy this file into the L1 PF data dir:
+#   1. Copy this file into the project factory data dir:
 #        cp blueprints/research-delegation/project-templates/hardened-project.yaml.sample \
 #           fast/stages-aw/3-project-factory-prod/data/projects/<dept>-<pi>-<workload>.yaml
 #   2. Replace every <PLACEHOLDER>.
@@ -36,8 +36,8 @@ labels:
   cost-center: "<COST_CENTER>"
   data-classification: "<public|internal|restricted>"
 
-# Allowlisted service set — matches the gcp.restrictServiceUsage policy at the
-# Teams folder level so nothing is blocked. To enable a new service, raise it
+# Allowlisted service set — matches the gcp.restrictServiceUsage policy on the
+# department folder so nothing is blocked. To enable a new service, raise it
 # with IT (they extend the org policy at folder scope).
 services:
   - accesscontextmanager.googleapis.com
@@ -85,7 +85,7 @@ shared_vpc_service_config:
     - <DEPT_KEY>-<PI_USERNAME>-<WORKLOAD_NAME>-0
 
 # Per-project org-policy overrides that REINFORCE the baseline — these are
-# already inherited from the Teams folder, but pinning them at the project
+# already inherited from the department folder, but pinning them at the project
 # level prevents a careless future override at the folder/PI level from
 # weakening this specific project's posture.
 org_policies:

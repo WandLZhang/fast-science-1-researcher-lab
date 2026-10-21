@@ -1,27 +1,45 @@
 #!/usr/bin/env bash
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 # blueprints/research-delegation/org-policies/apply-policies.sh
 #
-# Apply (or dry-run) the org policies in this directory at the Teams folder so
-# every department subfolder + project inherits them.
+# Apply (or dry-run) the org policies in this directory on each department
+# folder, so the department's Development and Production folders and every
+# project in them inherit the baseline.
 #
 # Required env vars:
-#   TEAMS_FOLDER_ID    Numeric folder ID of the "Teams" folder created by
-#                      Stage 1 with fast_features.teams = true. Find it with:
-#                        gcloud resource-manager folders list \
-#                          --folder=$STELLAR_ENGINE_FOLDER_ID --format='value(name,displayName)'
-#                      and pick the one named "Teams".
-#   CUSTOMER_ID        Workspace / Cloud Identity customer ID. Find with:
-#                        gcloud organizations list --format='value(directoryCustomerId)'
-#   UNIVERSITY_DOMAIN  Your primary domain (e.g. example.edu). No leading "@".
+#   DEPARTMENT_FOLDER_IDS  Comma-separated department folder IDs (numeric or
+#                          folders/NNN). 1-resman lists them:
+#                            cd fast/stages-aw/1-resman
+#                            terraform output -json departments | python3 -c \
+#                              'import json,sys; print(",".join(v["folder"] for v in json.load(sys.stdin).values()))'
+#   ORG_ID                 Numeric organization ID. Find it with:
+#                            gcloud organizations list
+#   UNIVERSITY_DOMAIN      Your primary domain (e.g. example.edu). No leading "@".
 #
 # Optional flags:
-#   --dry-run   Apply with dryRunSpec instead of spec, so violations log to
+#   --dry-run   Write dryRunSpec instead of spec, so violations log to
 #               Cloud Audit Logs without blocking. Recommended for first apply.
-#   --enforce   Apply with spec (default). Promotes from dry-run to enforced.
+#   --enforce   Write spec (default). Promotes from dry-run to enforced.
+#
+# Each mode updates only its own field (--update-mask), so a later --dry-run
+# never clears an enforced spec.
 #
 # Usage:
-#   export TEAMS_FOLDER_ID=123456789012
-#   export CUSTOMER_ID=C01abcdef
+#   export DEPARTMENT_FOLDER_IDS=NNNNNNNNNNNN,NNNNNNNNNNNN
+#   export ORG_ID=NNNNNNNNNNNN
 #   export UNIVERSITY_DOMAIN=example.edu
 #   ./apply-policies.sh --dry-run     # first
 #   # ... wait, check Policy Analyzer for violations on existing projects ...
@@ -36,9 +54,21 @@ case "${1:-}" in
   *) echo "unknown flag: $1 (use --dry-run or --enforce)" >&2; exit 2 ;;
 esac
 
-: "${TEAMS_FOLDER_ID:?must be set}"
-: "${CUSTOMER_ID:?must be set}"
+: "${DEPARTMENT_FOLDER_IDS:?must be set (comma-separated)}"
+: "${ORG_ID:?must be set}"
 : "${UNIVERSITY_DOMAIN:?must be set}"
+
+folders=()
+IFS=',' read -ra _raw_folders <<<"$DEPARTMENT_FOLDER_IDS"
+for f in "${_raw_folders[@]}"; do
+  f="${f// /}"
+  f="${f#folders/}"
+  [[ -n "$f" ]] && folders+=("$f")
+done
+if [[ ${#folders[@]} -eq 0 ]]; then
+  echo "DEPARTMENT_FOLDER_IDS has no folder IDs" >&2
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMPDIR="$(mktemp -d)"
@@ -51,30 +81,39 @@ if [[ ${#yamls[@]} -eq 0 ]]; then
   exit 1
 fi
 
-echo "Applying ${#yamls[@]} org policies to folders/${TEAMS_FOLDER_ID} in ${MODE} mode"
-echo
+if [[ "$MODE" == "dryrun" ]]; then
+  mask="dryRunSpec"
+else
+  mask="spec"
+fi
 
-for src in "${yamls[@]}"; do
-  base="$(basename "$src")"
-  out="$TMPDIR/$base"
-
-  # Substitute placeholders: ${TEAMS_FOLDER_ID}, ${CUSTOMER_ID}, ${UNIVERSITY_DOMAIN}
-  TEAMS_FOLDER_ID="$TEAMS_FOLDER_ID" \
-  CUSTOMER_ID="$CUSTOMER_ID" \
-  UNIVERSITY_DOMAIN="$UNIVERSITY_DOMAIN" \
-  envsubst '${TEAMS_FOLDER_ID} ${CUSTOMER_ID} ${UNIVERSITY_DOMAIN}' < "$src" > "$out"
-
-  # In dry-run mode, swap the top-level `spec:` key for `dryRunSpec:`.
-  # Org Policy v2 supports both simultaneously, but for a clean first-pass we
-  # only set dryRunSpec; the `--enforce` pass replaces it with spec.
-  if [[ "$MODE" == "dryrun" ]]; then
-    sed -i 's/^spec:/dryRunSpec:/' "$out"
-  fi
-
-  echo "→ $base"
-  gcloud org-policies set-policy "$out"
+for folder in "${folders[@]}"; do
+  echo "Applying ${#yamls[@]} org policies to folders/${folder} in ${MODE} mode"
   echo
+
+  for src in "${yamls[@]}"; do
+    base="$(basename "$src")"
+    out="$TMPDIR/${folder}-${base}"
+
+    # Substitute placeholders: ${DEPARTMENT_FOLDER_ID}, ${ORG_ID}, ${UNIVERSITY_DOMAIN}
+    DEPARTMENT_FOLDER_ID="$folder" \
+    ORG_ID="$ORG_ID" \
+    UNIVERSITY_DOMAIN="$UNIVERSITY_DOMAIN" \
+    envsubst '${DEPARTMENT_FOLDER_ID} ${ORG_ID} ${UNIVERSITY_DOMAIN}' < "$src" > "$out"
+
+    # In dry-run mode, swap the top-level `spec:` key for `dryRunSpec:`.
+    if [[ "$MODE" == "dryrun" ]]; then
+      sed -i 's/^spec:/dryRunSpec:/' "$out"
+    fi
+
+    echo "→ $base"
+    cat "$out"
+    gcloud org-policies set-policy "$out" --update-mask="$mask"
+    echo
+  done
 done
 
 echo "Done. To inspect what's been applied:"
-echo "  gcloud org-policies list --folder=${TEAMS_FOLDER_ID}"
+for folder in "${folders[@]}"; do
+  echo "  gcloud org-policies list --folder=${folder}"
+done

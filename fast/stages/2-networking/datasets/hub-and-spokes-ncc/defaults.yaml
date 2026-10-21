@@ -26,13 +26,13 @@ context:
       - 172.16.0.0/12
       - 192.168.0.0/16
   locations:
-    primary: europe-west1
-    secondary: europe-west3
+    primary: us-east4      # ← CHANGE: match regions.primary in 0-bootstrap
+    secondary: us-central1 # ← CHANGE
   iam_principals: {}
 projects:
   defaults:
     locations:
-      storage: eu
+      storage: us # ← CHANGE: location for project buckets
   # edit and uncomment for vpc-sc cooperative configuration
   # overrides:
   #   vpc_sc:
@@ -45,4 +45,5 @@ vpcs:
 output_files:
   # local path is optional but recommended when starting
   # local_path: ~/fast-config/fast-test-00
+  # resolves to automation.outputs_bucket from the 0-bootstrap tfvars
   storage_bucket: $storage_buckets:iac-0/iac-outputs

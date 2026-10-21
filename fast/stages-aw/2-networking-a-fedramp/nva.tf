@@ -188,12 +188,15 @@ module "ilb-nva-vdss" {
   }
 }
 
+# Upstream: single route to primary ILB only.
+# Changed to per-region routes so each region's traffic reaches its local NVA.
 resource "google_compute_route" "default" {
-  name         = "default-route-nva"
+  for_each     = var.regions
+  name         = "default-route-nva-${each.key}"
   project      = module.vdss-host-project.project_id
   dest_range   = "0.0.0.0/0"
   network      = module.vdss-vpc.name
-  next_hop_ilb = module.ilb-nva-vdss["primary"].forwarding_rules[""].id
+  next_hop_ilb = module.ilb-nva-vdss[each.key].forwarding_rules[""].id
   priority     = 100
 }
 

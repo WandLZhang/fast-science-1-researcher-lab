@@ -1,18 +1,33 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Auto-lien Cloud Function.
 
 Triggered on every CreateProject audit log event published to the Pub/Sub
 topic by the org-level aggregated log sink. For each new project that lives
-under the configured Teams folder subtree, attaches a deletion lien.
+under one of the configured department folders, attaches a deletion lien.
 
 The lien blocks resourcemanager.projects.delete until removed by an identity
 holding roles/resourcemanager.lienModifier on the project (or this function's
-SA, since it has lienModifier on the Teams folder ancestor).
+SA, since it has lienModifier on each department folder).
 
 Environment variables (set by Terraform):
-    TEAMS_FOLDER_ID  Folder ID under which projects qualify for auto-lien.
-    LIEN_REASON      Reason text stored on the lien.
-    ORG_ID           Org ID — used as a sanity-check upper bound when walking
-                     a project's ancestry.
+    DEPARTMENT_FOLDER_IDS  Comma-separated department folder IDs. Projects
+                           under any of them qualify for auto-lien.
+    LIEN_REASON            Reason text stored on the lien.
+    ORG_ID                 Org ID — used as a sanity-check upper bound when
+                           walking a project's ancestry.
 """
 
 from __future__ import annotations
@@ -30,7 +45,11 @@ from google.cloud import resourcemanager_v3
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-TEAMS_FOLDER_ID = os.environ["TEAMS_FOLDER_ID"]
+DEPARTMENT_FOLDERS = frozenset(
+    f"folders/{folder_id.strip()}"
+    for folder_id in os.environ["DEPARTMENT_FOLDER_IDS"].split(",")
+    if folder_id.strip()
+)
 LIEN_REASON = os.environ["LIEN_REASON"]
 ORG_ID = os.environ["ORG_ID"]
 LIEN_RESTRICTIONS = ["resourcemanager.projects.delete"]
@@ -81,19 +100,19 @@ def _ancestors(project_id: str) -> Iterable[str]:
         yield parent
 
 
-def _is_under_teams_folder(project_id: str) -> bool:
-    target = f"folders/{TEAMS_FOLDER_ID}"
+def _department_folder_of(project_id: str) -> str | None:
+    """Return the department folder that holds the project, or None."""
     org = f"organizations/{ORG_ID}"
     seen_org = False
     for anc in _ancestors(project_id):
-        if anc == target:
-            return True
+        if anc in DEPARTMENT_FOLDERS:
+            return anc
         if anc == org:
             seen_org = True
             break
     if not seen_org:
         log.warning("walked past expected org while checking ancestry of %s", project_id)
-    return False
+    return None
 
 
 def _create_lien(project_id: str) -> None:
@@ -122,6 +141,8 @@ def handle_project_created(event: CloudEvent) -> None:
         log.exception("failed to decode pubsub payload")
         return
 
+    log.info("audit entry: %s", json.dumps(entry))
+
     project_id = _project_id_from_audit(entry)
     if not project_id:
         log.info("audit entry has no project_id; ignoring (entry insertId=%s)",
@@ -131,13 +152,14 @@ def handle_project_created(event: CloudEvent) -> None:
     log.info("CreateProject event for project_id=%s", project_id)
 
     try:
-        if not _is_under_teams_folder(project_id):
-            log.info("project %s is not under teams folder %s; skipping",
-                     project_id, TEAMS_FOLDER_ID)
-            return
+        department_folder = _department_folder_of(project_id)
     except Exception:
         log.exception("ancestry check failed for project %s", project_id)
         return
+    if department_folder is None:
+        log.info("project %s is not under a department folder; skipping", project_id)
+        return
+    log.info("project %s is under department folder %s", project_id, department_folder)
 
     try:
         _create_lien(project_id)

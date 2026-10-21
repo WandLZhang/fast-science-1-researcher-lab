@@ -14,8 +14,17 @@
  * limitations under the License.
  */
 
+variable "automation" {
+  # tfdoc:variable:source 0-bootstrap
+  description = "Automation resources from the bootstrap stage. Only outputs_bucket is used, for the iac-0/iac-outputs storage bucket context."
+  type = object({
+    outputs_bucket = string
+  })
+  default = null
+}
+
 variable "billing_account" {
-  # tfdoc:variable:source 0-org-setup
+  # tfdoc:variable:source 0-globals
   description = "Billing account id."
   type = object({
     id = string
@@ -23,7 +32,7 @@ variable "billing_account" {
 }
 
 variable "custom_roles" {
-  # tfdoc:variable:source 0-org-setup
+  # tfdoc:variable:source 0-bootstrap
   description = "Custom roles defined at the org level, in key => id format."
   type        = map(string)
   nullable    = false
@@ -31,9 +40,9 @@ variable "custom_roles" {
 }
 
 variable "folder_ids" {
-  # tfdoc:variable:source 0-org-setup
-  description = "Folders created in the bootstrap stage."
-  type        = map(string)
+  # tfdoc:variable:source 1-resman
+  description = "Folders created in the resource management stage. Nested environment folders under envs become envs/<key>; null entries are dropped."
+  type        = any
   nullable    = false
   default     = {}
 }
@@ -56,7 +65,7 @@ variable "kms_keys" {
 }
 
 variable "organization" {
-  # tfdoc:variable:source 0-org-setup
+  # tfdoc:variable:source 0-globals
   description = "Organization details."
   type = object({
     id = number
@@ -73,7 +82,7 @@ variable "perimeters" {
 }
 
 variable "prefix" {
-  # tfdoc:variable:source 0-org-setup
+  # tfdoc:variable:source 0-globals
   description = "Prefix used for resources that need unique names. Use a maximum of 9 chars for organizations, and 11 chars for tenants."
   type        = string
   validation {
@@ -91,7 +100,7 @@ variable "project_ids" {
 }
 
 variable "service_accounts" {
-  # tfdoc:variable:source 0-org-setup
+  # tfdoc:variable:source 1-resman
   description = "Service accounts created in the bootstrap stage."
   type        = map(string)
   nullable    = false

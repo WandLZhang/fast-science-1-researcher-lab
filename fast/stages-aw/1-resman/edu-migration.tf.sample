@@ -1,0 +1,67 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Moves department folders created by the fast-science-1-researcher-lab
+# 1-resman stage (team_folders) into branch-edu.tf (departments) without
+# recreating them.
+#
+#   1. In your tfvars, rename team_folders to departments. Drop cicd
+#      blocks: departments don't support them. Set envs_folders = {} if
+#      you don't use environment folders.
+#   2. Copy this file to edu-migration.tf.
+#   3. Repeat the first seven blocks once per department, replacing KEY.
+#      Repeat the last block once per department_admin_principals entry,
+#      replacing KEY-PRINCIPAL with "<key>-<principal>".
+#   4. Run terraform plan. It should list moves and no replacements.
+#   5. Apply, then delete edu-migration.tf.
+
+moved {
+  from = module.branch-teams-team-folder["KEY"]
+  to   = module.branch-edu-folder["KEY"]
+}
+
+moved {
+  from = module.branch-teams-team-sa["KEY"]
+  to   = module.branch-edu-sa["KEY"]
+}
+
+moved {
+  from = module.branch-teams-team-gcs["KEY"]
+  to   = module.branch-edu-gcs["KEY"]
+}
+
+moved {
+  from = module.branch-teams-team-dev-folder["KEY"]
+  to   = module.branch-edu-dev-folder["KEY"]
+}
+
+moved {
+  from = module.branch-teams-team-prod-folder["KEY"]
+  to   = module.branch-edu-prod-folder["KEY"]
+}
+
+moved {
+  from = google_tags_tag_value.department["KEY"]
+  to   = google_tags_tag_value.edu_department["KEY"]
+}
+
+moved {
+  from = google_tags_tag_binding.department["KEY"]
+  to   = google_tags_tag_binding.edu_department["KEY"]
+}
+
+moved {
+  from = google_organization_iam_member.dept_orgpolicy_admin["KEY-PRINCIPAL"]
+  to   = google_organization_iam_member.edu_department_orgpolicy_admin["KEY-PRINCIPAL"]
+}

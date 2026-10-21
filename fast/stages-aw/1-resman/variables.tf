@@ -170,25 +170,8 @@ variable "cicd_repositories" {
 }
 
 variable "common_services_folder" {
-  description = "Common services folder where non-tenant related resources should be kept. From L0: the it-services wrapper folder for unspecified regime, or the AW workload folder for compliance regimes."
+  description = "Common services folder where non-tenant related resources should be kept."
   type        = string
-}
-
-variable "dept_folder_parent" {
-  # tfdoc:variable:source 0-bootstrap
-  description = "Parent under which L1 creates department folders. From L0: organizations/<id> (org root) for unspecified regime so departments are siblings to it-services; the AW workload folder for compliance regimes so departments inherit the regime."
-  type        = string
-}
-
-variable "department_tag" {
-  # tfdoc:variable:source 0-bootstrap
-  description = "Org-level tag key (created by L0) used to scope folder-level org-policy admin delegation. L1 creates a tag value per team_folders entry, binds it to the department folder, and grants roles/orgpolicy.policyAdmin at org with IAM condition resource.matchTag(...)."
-  type = object({
-    key_id         = string
-    key_short_name = string
-    key_namespaced = string
-    org_id         = number
-  })
 }
 
 variable "custom_roles" {
@@ -201,6 +184,13 @@ variable "custom_roles" {
     storage_viewer                = string
   })
   default = null
+}
+
+variable "envs_folders" {
+  description = "List of environments to be created for projects to go into."
+  type = map(object({
+    admin = string
+  }))
 }
 
 variable "factories_config" {
@@ -219,13 +209,10 @@ variable "fast_features" {
     data_platform   = optional(bool, false)
     gke             = optional(bool, false)
     gcve            = optional(bool, false)
-    project_factory = optional(bool, true)
+    project_factory = optional(bool, false)
     sandbox         = optional(bool, false)
-    # teams defaults to true because dept-folder creation is THE primary L1
-    # function in the Fast Science delegation model. Nothing is created unless
-    # var.team_folders also has entries, so leaving teams=true when team_folders
-    # is null/empty is safe and inert.
-    teams = optional(bool, true)
+    teams           = optional(bool, false)
+    envs            = optional(bool, false)
   })
   default  = {}
   nullable = false
@@ -235,11 +222,13 @@ variable "folder_iam" {
   description = "Authoritative IAM for top-level folders."
   type = object({
     data_platform = optional(map(list(string)), {})
+    envs          = optional(map(list(string)), {})
     gcve          = optional(map(list(string)), {})
     gke           = optional(map(list(string)), {})
     sandbox       = optional(map(list(string)), {})
     security      = optional(map(list(string)), {})
     network       = optional(map(list(string)), {})
+    teams         = optional(map(list(string)), {})
     tenants       = optional(map(list(string)), {})
   })
   nullable = false
@@ -317,7 +306,7 @@ variable "regions" {
 }
 
 variable "team_folders" {
-  description = "Department folders to be created. Each map key (e.g., \"engineering\") becomes the folder name AND the value of the department tag bound to the folder. Optional dev_org_policies_preset / prod_org_policies_preset accept \"sandbox\" or \"hardened\" to apply folder-level org policies. department_admin_principals receives roles/orgpolicy.policyAdmin at org level with IAM condition resource.matchTag(...) limiting them to operating on this department's tagged folder subtree only."
+  description = "Team folders to be created. Format is described in a code comment."
   type = map(object({
     descriptive_name         = string
     iam_by_principals        = map(list(string))
@@ -328,9 +317,6 @@ variable "team_folders" {
       name              = string
       type              = string
     }))
-    dev_org_policies_preset     = optional(string)
-    prod_org_policies_preset    = optional(string)
-    department_admin_principals = optional(list(string), [])
   }))
   default = null
 }

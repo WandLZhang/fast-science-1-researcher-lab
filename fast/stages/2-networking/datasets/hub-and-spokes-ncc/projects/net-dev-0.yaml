@@ -5,7 +5,9 @@
 # yaml-language-server: $schema=../../../schemas/project.schema.json
 
 name: dev-net-spoke-0
-parent: $folder_ids:networking/dev
+# The landing zone's 1-resman creates one Networking folder. Use another
+# folder_ids key (for example envs/<env key>) to place the spoke elsewhere.
+parent: $folder_ids:networking
 services:
   - container.googleapis.com
   - compute.googleapis.com

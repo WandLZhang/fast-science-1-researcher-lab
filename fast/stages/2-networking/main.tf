@@ -25,20 +25,38 @@ locals {
   }
   # fail if we have no valid defaults
   _defaults = yamldecode(file(local.paths.defaults))
+  # the landing zone's 1-resman nests environment folders under envs and
+  # leaves disabled branches null
+  _folder_ids = merge(
+    {
+      for k, v in var.folder_ids : k => tostring(v)
+      if k != "envs" && v != null
+    },
+    try({
+      for k, v in var.folder_ids.envs :
+      "envs/${k}" => tostring(v) if v != null
+    }, {})
+  )
   ctx = merge(local._ctx, {
     custom_roles = merge(var.custom_roles, local._ctx.custom_roles)
-    folder_ids   = merge(var.folder_ids, var.context.folder_ids)
+    folder_ids   = merge(local._folder_ids, var.context.folder_ids)
     iam_principals = merge(
       var.iam_principals,
       {
         for k, v in var.service_accounts :
-        "service_accounts/${k}" => "serviceAccount:${v}"
+        "service_accounts/${k}" => "serviceAccount:${v}" if v != null
       },
       local._ctx.iam_principals
     )
-    kms_keys          = merge(var.kms_keys, local._ctx.kms_keys)
-    project_ids       = merge(var.project_ids, local._ctx.project_ids)
-    storage_buckets   = merge(var.storage_buckets, local._ctx.storage_buckets)
+    kms_keys    = merge(var.kms_keys, local._ctx.kms_keys)
+    project_ids = merge(var.project_ids, local._ctx.project_ids)
+    storage_buckets = merge(
+      var.storage_buckets,
+      var.automation == null ? {} : {
+        "iac-0/iac-outputs" = var.automation.outputs_bucket
+      },
+      local._ctx.storage_buckets
+    )
     tag_keys          = merge(var.tag_keys, local._ctx.tag_keys)
     tag_values        = merge(var.tag_values, local._ctx.tag_values)
     vpc_sc_perimeters = merge(var.perimeters, local._ctx.vpc_sc_perimeters)
@@ -69,8 +87,8 @@ locals {
         billing_account = var.billing_account.id
         prefix          = var.prefix
       },
-      lookup(var.folder_ids, local.defaults.folder_name, null) == null ? {} : {
-        parent = lookup(var.folder_ids, local.defaults.folder_name, null)
+      lookup(local._folder_ids, local.defaults.folder_name, null) == null ? {} : {
+        parent = lookup(local._folder_ids, local.defaults.folder_name, null)
       },
       try(local._defaults.projects.defaults, {})
     )

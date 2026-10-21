@@ -24,10 +24,11 @@ class TestBootstrapLoggingOrder(unittest.TestCase):
 
   def test_folders_and_workload_depend_on_organization_logging(self):
     org_tf = (_BOOTSTRAP_DIR / 'organization.tf').read_text(encoding='utf-8')
+    # This fork replaces no-compliance-folder and branch-common-services-folder
+    # with a single managed folder (it-services).
     for block_header in (
         'resource "google_assured_workloads_workload" "primary"',
-        'module "no-compliance-folder"',
-        'module "branch-common-services-folder"',
+        'module "managed-folder"',
     ):
       with self.subTest(block=block_header):
         pattern = re.compile(
@@ -103,8 +104,9 @@ class TestBootstrapLoggingOrder(unittest.TestCase):
   def test_logging_location_avoids_checklist_cycle(self):
     main_tf = (_BOOTSTRAP_DIR / 'main.tf').read_text(encoding='utf-8')
     self.assertNotIn('local.checklist.location', main_tf)
+    # This fork reads var.locations and falls back to the primary region.
     self.assertIn(
-        'logging = var.regions.primary',
+        'logging = var.locations.logging != "global" ? var.locations.logging : var.regions.primary',
         main_tf,
     )
 

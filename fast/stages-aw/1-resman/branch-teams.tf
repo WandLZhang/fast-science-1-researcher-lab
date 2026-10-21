@@ -17,61 +17,59 @@
 # tfdoc:file:description Team stage resources.
 
 locals {
-  # Folder-level org policy presets applied to per-team Development and
-  # Production folders. Use dev_org_policies_preset / prod_org_policies_preset
-  # on each var.team_folders.<team> entry to opt in.
-  #
-  # Department admins can still override a preset on a single project. The
-  # tag-conditioned org-level orgpolicy.policyAdmin grant at the end of this
-  # file covers the department's whole subtree (issue #1).
-  folder_org_policy_presets = {
-    sandbox = {
-      "compute.vmExternalIpAccess"         = { rules = [{ allow = { all = true } }] }
-      "compute.requireOsLogin"             = { rules = [{ enforce = false }] }
-      "compute.skipDefaultNetworkCreation" = { rules = [{ enforce = false }] }
-      "gcp.restrictServiceUsage"           = { rules = [{ allow = { all = true } }] }
+  # FAST-specific IAM
+  _teams_folder_fast_iam = !var.fast_features.teams ? {} : {
+    "roles/logging.admin"                  = [module.branch-teams-sa[0].iam_email]
+    "roles/owner"                          = [module.branch-teams-sa[0].iam_email]
+    "roles/resourcemanager.folderAdmin"    = [module.branch-teams-sa[0].iam_email]
+    "roles/resourcemanager.projectCreator" = [module.branch-teams-sa[0].iam_email]
+    "roles/compute.xpnAdmin"               = [module.branch-teams-sa[0].iam_email]
+  }
+  # deep-merge FAST-specific IAM with user-provided bindings in var.folder_iam
+  _teams_folder_iam = merge(
+    var.folder_iam.teams,
+    {
+      for role, principals in local._teams_folder_fast_iam :
+      role => distinct(concat(principals, lookup(var.folder_iam.teams, role, [])))
     }
-    hardened = {
-      "compute.vmExternalIpAccess"           = { rules = [{ deny = { all = true } }] }
-      "compute.requireOsLogin"               = { rules = [{ enforce = true }] }
-      "compute.skipDefaultNetworkCreation"   = { rules = [{ enforce = true }] }
-      "compute.disableSerialPortAccess"      = { rules = [{ enforce = true }] }
-      "iam.disableServiceAccountKeyCreation" = { rules = [{ enforce = true }] }
-    }
+  )
+}
+
+module "branch-teams-folder" {
+  source       = "../../../modules/folder"
+  count        = var.fast_features.teams ? 1 : 0
+  parent       = var.assured_workloads.folder
+  name         = "Teams"
+  iam          = local._teams_folder_iam
+  tag_bindings = null
+}
+
+module "branch-teams-sa" {
+  source       = "../../../modules/iam-service-account"
+  count        = var.fast_features.teams ? 1 : 0
+  project_id   = var.automation.project_id
+  name         = "prod-resman-teams-0"
+  display_name = "Terraform resman teams service account."
+  prefix       = var.prefix
+  iam_project_roles = {
+    (var.automation.project_id) = ["roles/serviceusage.serviceUsageConsumer"]
+  }
+  iam_storage_roles = {
+    (var.automation.outputs_bucket) = ["roles/storage.objectAdmin"]
   }
 }
 
-# REMOVED: module "branch-teams-folder" (the "Teams/" wrapper).
-# Team folders now nest directly under var.assured_workloads.folder, which
-# L0 resolves to either the organization root (COMPLIANCE_REGIME_UNSPECIFIED)
-# or the AW workload folder (compliance regime). Schools end up as siblings
-# to the L0 bootstrap projects, not buried under a "Teams/" intermediate.
-#
-# Backwards-compat migration: forget the old Teams folder from state; the
-# empty folder is left in GCP for manual cleanup via:
-#   gcloud resource-manager folders delete <TEAMS_FOLDER_ID>
-removed {
-  from = module.branch-teams-folder
-  lifecycle {
-    destroy = false
-  }
-}
-
-# REMOVED: module "branch-teams-sa" and module "branch-teams-gcs" — these
-# were a separate-stage automation SA + state bucket meant to manage the now-
-# deleted Teams wrapper folder. Fast Science manages team folders in this
-# resman stage directly, so they had no remaining purpose. Per-team SAs and
-# state buckets (branch-teams-team-sa / -gcs) are kept.
-removed {
-  from = module.branch-teams-sa
-  lifecycle {
-    destroy = true
-  }
-}
-removed {
-  from = module.branch-teams-gcs
-  lifecycle {
-    destroy = true
+module "branch-teams-gcs" {
+  source        = "../../../modules/gcs"
+  count         = var.fast_features.teams ? 1 : 0
+  project_id    = var.automation.project_id
+  name          = "prod-resman-teams-0"
+  prefix        = var.prefix
+  location      = var.regions.primary
+  storage_class = local.gcs_storage_class
+  versioning    = true
+  iam = {
+    "roles/storage.objectAdmin" = [module.branch-teams-sa[0].iam_email]
   }
 }
 
@@ -79,13 +77,8 @@ removed {
 module "branch-teams-team-folder" {
   source   = "../../../modules/folder"
   for_each = var.fast_features.teams ? coalesce(var.team_folders, {}) : {}
-  # parent: var.dept_folder_parent — for unspecified regime, this is the
-  # ORG ROOT (department folders sit as siblings to it-services). For
-  # compliance, it's the AW workload folder (so departments inherit the
-  # regime). Different from var.assured_workloads.folder which always
-  # points at where IT stuff lives.
-  parent = var.dept_folder_parent
-  name   = each.value.descriptive_name
+  parent   = module.branch-teams-folder[0].id
+  name     = each.value.descriptive_name
   iam = {
     "roles/logging.admin"                  = [module.branch-teams-team-sa[each.key].iam_email]
     "roles/owner"                          = [module.branch-teams-team-sa[each.key].iam_email]
@@ -152,7 +145,6 @@ module "branch-teams-team-dev-folder" {
     "roles/viewer"                               = local.branch_optional_r_sa_lists.pf-dev
     (var.custom_roles.organization_admin_viewer) = local.branch_optional_r_sa_lists.pf-dev
   }
-  org_policies = try(local.folder_org_policy_presets[each.value.dev_org_policies_preset], {})
   tag_bindings = null
 }
 
@@ -176,55 +168,5 @@ module "branch-teams-team-prod-folder" {
     "roles/viewer"                               = local.branch_optional_r_sa_lists.pf-prod
     (var.custom_roles.organization_admin_viewer) = local.branch_optional_r_sa_lists.pf-prod
   }
-  org_policies = try(local.folder_org_policy_presets[each.value.prod_org_policies_preset], {})
   tag_bindings = null
-}
-
-# Per-department tag value under L0's department tag key. Tag value short
-# name = the team_folders map key (e.g., "engineering"). Used by the
-# conditional IAM binding below to scope orgpolicy.policyAdmin to this
-# department's folder subtree only.
-resource "google_tags_tag_value" "department" {
-  for_each    = var.fast_features.teams ? coalesce(var.team_folders, {}) : {}
-  parent      = var.department_tag.key_id
-  short_name  = each.key
-  description = "Department tag value for ${each.value.descriptive_name}. Bound to the department's folder; referenced by IAM conditions delegating org-policy admin authority."
-}
-
-# Bind the tag value to the department folder. Tag inheritance means all
-# resources nested inside the folder (Development, Production, projects)
-# also match the tag, so the IAM condition below covers the whole subtree.
-resource "google_tags_tag_binding" "department" {
-  for_each  = var.fast_features.teams ? coalesce(var.team_folders, {}) : {}
-  parent    = "//cloudresourcemanager.googleapis.com/${module.branch-teams-team-folder[each.key].id}"
-  tag_value = google_tags_tag_value.department[each.key].id
-}
-
-# Conditional org-level grant of roles/orgpolicy.policyAdmin to the
-# department's admin principals, scoped by IAM condition matching the
-# department's tag. The role itself is org-scope-only (predefined role
-# cannot be granted at folder level, and the underlying orgpolicy.*
-# write permissions cannot be put in custom roles — verified empirically
-# 2026-05-22), but the IAM condition resource.matchTag(...) restricts the
-# effective grant to resources tagged with this department's tag value.
-# Pattern from https://cloud.google.com/iam/docs/conditions-overview
-resource "google_organization_iam_member" "dept_orgpolicy_admin" {
-  for_each = var.fast_features.teams ? merge([
-    for k, v in coalesce(var.team_folders, {}) : {
-      for principal in v.department_admin_principals :
-      "${k}-${principal}" => {
-        dept_key  = k
-        principal = principal
-      }
-    }
-  ]...) : {}
-
-  org_id = var.department_tag.org_id
-  role   = "roles/orgpolicy.policyAdmin"
-  member = each.value.principal
-  condition {
-    title       = "dept_${each.value.dept_key}_only"
-    description = "Restricts orgpolicy.policyAdmin to resources tagged ${var.department_tag.key_short_name}=${each.value.dept_key}."
-    expression  = "resource.matchTag(\"${var.department_tag.org_id}/${var.department_tag.key_short_name}\", \"${each.value.dept_key}\")"
-  }
 }

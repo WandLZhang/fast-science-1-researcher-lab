@@ -89,6 +89,14 @@ locals {
         role   = "roles/billing.costsManager"
       }
     },
+    # xpnAdmin for project factory — enables shared_vpc_service_config
+    # in project YAMLs to attach service projects to Shared VPC hosts
+    !var.fast_features.project_factory ? {} : {
+      sa_pf_prod_xpn_admin = {
+        member = module.branch-pf-prod-sa[0].iam_email
+        role   = "roles/compute.xpnAdmin"
+      }
+    },
     # lightweight tenant roles
     {
       for k, v in var.tenants : "oslogin_ext_user-tenant_${k}" => {

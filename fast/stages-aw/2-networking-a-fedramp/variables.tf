@@ -165,7 +165,8 @@ variable "regions" {
   # tfdoc:variable:source 0-bootstrap
   description = "Region definitions. Inherited from 0-bootstrap outputs. Must be specified in bootstrap terraform.tfvars."
   type = object({
-    primary = string
+    primary   = string
+    secondary = optional(string) # Upstream: no secondary. Added to support multi-region NVA.
   })
   nullable = false
 }

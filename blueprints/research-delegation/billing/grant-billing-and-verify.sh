@@ -1,4 +1,18 @@
 #!/usr/bin/env bash
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 # blueprints/research-delegation/billing/grant-billing-and-verify.sh
 #
 # Two operations bundled:
@@ -9,24 +23,25 @@
 #                       can be linked to the master billing account.
 #
 #   2. verify         — sanity-check the delegated provisioning end-to-end:
-#                       team folder exists, team SA exists with right roles,
-#                       PI group has impersonation rights, org policies
-#                       inherited, project liens working.
+#                       department folder exists, team SA exists with right
+#                       roles, PI group has impersonation rights, baseline org
+#                       policies set, project liens working.
 #
 # Required env vars (always):
-#   PREFIX                 L0 Stage 0 prefix (e.g. "uni")
+#   PREFIX                 0-bootstrap prefix (e.g. "uni")
 #   AUTOMATION_PROJECT     L0 automation project (typically <PREFIX>-prod-iac-core-0)
 #
 # For grant-billing:
 #   BILLING_ACCOUNT_ID     Master billing account ID (e.g. 0X0X0X-0X0X0X-0X0X0X)
-#   TEAM_KEYS              Comma-separated list of team_folders keys to grant for
+#   TEAM_KEYS              Comma-separated list of departments keys to grant for
 #                          (e.g. "engineering,computational-sciences")
 #   PI_GROUPS              Comma-separated list of PI group emails
 #                          (e.g. "engineering-pis@example.edu,cs-pis@example.edu")
 #
 # For verify:
-#   TEAMS_FOLDER_ID        Numeric folder ID of the "Teams" folder
-#   TEAM_KEY               Single team key to verify (e.g. "engineering")
+#   TEAM_KEY               Single departments key to verify (e.g. "engineering")
+#   DEPARTMENT_FOLDER_ID   That department's folder ID (numeric or folders/NNN),
+#                          from `terraform output departments` in 1-resman
 #   PI_GROUP               PI group email to verify (e.g. "engineering-pis@example.edu")
 #   TEST_PROJECT_ID        (optional) project ID created during the demo, used
 #                          to spot-check inherited org policies and lien
@@ -92,9 +107,10 @@ fi
 #------------------------------------------------------------------------------#
 # verify                                                                       #
 #------------------------------------------------------------------------------#
-: "${TEAMS_FOLDER_ID:?must be set}"
 : "${TEAM_KEY:?must be set}"
+: "${DEPARTMENT_FOLDER_ID:?must be set}"
 : "${PI_GROUP:?must be set}"
+department_folder_id="${DEPARTMENT_FOLDER_ID#folders/}"
 
 ok=0; fail=0
 pass() { echo "  ✓ $1"; ok=$((ok+1)); }
@@ -102,16 +118,13 @@ miss() { echo "  ✗ $1"; fail=$((fail+1)); }
 
 team_sa="${PREFIX}-prod-teams-${TEAM_KEY}-0@${AUTOMATION_PROJECT}.iam.gserviceaccount.com"
 
-echo "[1/6] Teams folder exists and contains the team folder"
-team_folder_id="$(
-  gcloud resource-manager folders list --folder="$TEAMS_FOLDER_ID" \
-    --format="value(name)" --filter="displayName~${TEAM_KEY}|displayName:'College'|displayName:'Institute'" \
-    | head -1 | sed 's@folders/@@'
-)" || true
-if [[ -n "$team_folder_id" ]]; then
-  pass "team folder under Teams: folders/${team_folder_id}"
+echo "[1/6] Department folder exists"
+team_folder_id=""
+if folder_name="$(gcloud resource-manager folders describe "$department_folder_id" --format='value(displayName)' 2>/dev/null)"; then
+  team_folder_id="$department_folder_id"
+  pass "department folder: folders/${team_folder_id} (${folder_name})"
 else
-  miss "no team folder found under folders/${TEAMS_FOLDER_ID} matching key '${TEAM_KEY}'"
+  miss "department folder not found: folders/${department_folder_id}"
 fi
 
 echo "[2/6] Team SA exists with FAST-managed roles on the team folder"
@@ -119,7 +132,7 @@ if gcloud iam service-accounts describe "$team_sa" --project="$AUTOMATION_PROJEC
   pass "team SA exists: ${team_sa}"
   if [[ -n "${team_folder_id:-}" ]]; then
     iam_json="$(gcloud resource-manager folders get-iam-policy "$team_folder_id" --format=json)"
-    for role in roles/owner roles/resourcemanager.folderAdmin roles/resourcemanager.projectCreator roles/compute.xpnAdmin; do
+    for role in roles/owner roles/logging.admin roles/resourcemanager.folderAdmin roles/resourcemanager.projectCreator roles/compute.xpnAdmin; do
       if echo "$iam_json" | grep -q "\"role\": \"${role}\".*serviceAccount:${team_sa}" || \
          echo "$iam_json" | python3 -c "import sys,json; p=json.load(sys.stdin); sys.exit(0 if any(b['role']=='${role}' and 'serviceAccount:${team_sa}' in b.get('members',[]) for b in p.get('bindings',[])) else 1)"; then
         pass "  ${role} bound to team SA on team folder"
@@ -152,7 +165,7 @@ if [[ -n "${team_folder_id:-}" ]]; then
   done
 fi
 
-echo "[5/6] Org policies inherited at the Teams folder level"
+echo "[5/6] Baseline org policies set on the department folder"
 expected_policies=(
   iam.managed.disableServiceAccountKeyCreation
   iam.managed.disableServiceAccountKeyUpload
@@ -168,12 +181,12 @@ expected_policies=(
   gcp.restrictServiceUsage
   vertexai.allowedPartnerModelFeatures
 )
-applied="$(gcloud org-policies list --folder="$TEAMS_FOLDER_ID" --format='value(name)' 2>/dev/null || true)"
+applied="$(gcloud org-policies list --folder="$department_folder_id" --format='value(name)' 2>/dev/null || true)"
 for p in "${expected_policies[@]}"; do
   if echo "$applied" | grep -q "/policies/${p}$"; then
     pass "  ${p}"
   else
-    miss "  ${p} not set on Teams folder"
+    miss "  ${p} not set on the department folder"
   fi
 done
 
