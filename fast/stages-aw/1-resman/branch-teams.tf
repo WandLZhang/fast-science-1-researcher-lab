@@ -21,10 +21,9 @@ locals {
   # Production folders. Use dev_org_policies_preset / prod_org_policies_preset
   # on each var.team_folders.<team> entry to opt in.
   #
-  # PIs and team admins retain orgpolicy.policyAdmin on the team folder via
-  # iam_by_principals (which compiles to non-authoritative
-  # google_folder_iam_member resources), so per-project overrides remain
-  # possible — addresses MSU L1 Issue #1 part 3.
+  # Department admins can still override a preset on a single project. The
+  # tag-conditioned org-level orgpolicy.policyAdmin grant at the end of this
+  # file covers the department's whole subtree (issue #1).
   folder_org_policy_presets = {
     sandbox = {
       "compute.vmExternalIpAccess"         = { rules = [{ allow = { all = true } }] }
