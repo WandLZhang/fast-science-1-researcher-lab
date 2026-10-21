@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   check-and-tag:
+    # Tags belong to the upstream project. Skip the job in forks.
+    if: github.repository == 'google/stellar-engine'
     runs-on: ubuntu-latest
     steps:
       # Step 1: Check if today is indeed the LAST Friday of the month
