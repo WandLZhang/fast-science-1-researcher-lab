@@ -1,0 +1,27 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Stage 0 State Bucket (Required for remote state access)
+stage_0_state_bucket = "sedev-gemini-enterprise-tf-state-sedev-test-mike-iac-core-0"
+
+# Domain / subdomain that you will distribute to your end-users to access Gemini for Government.
+# This domain will point to the Load Balancer's IP Address
+gemini_enterprise_domain = "gemini.yourdomain.gov"
+
+# Google Cloud Self-Managed SSL Cert Name
+ssl_certificate_name = "your-cert-name-here"
+
+# Optional: Local PEM file paths to have Stage 1 Terraform create the regional SSL certificate (#161)
+# ssl_certificate_path = "/full/path/to/certificate.pem"
+# ssl_private_key_path = "/full/path/to/private-key.pem"

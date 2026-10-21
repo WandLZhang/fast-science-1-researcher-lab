@@ -268,9 +268,11 @@ variable "groups" {
 }
 
 variable "kms_protection_level" {
+  # tfdoc:variable:source 0-bootstrap
   description = "KMS protection level."
   type        = string
   nullable    = true
+  default     = null
 }
 
 variable "organization" {

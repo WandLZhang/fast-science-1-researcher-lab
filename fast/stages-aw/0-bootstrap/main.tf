@@ -30,11 +30,10 @@ locals {
   locations = {
     bq      = var.regions.primary
     gcs     = var.regions.primary
-    logging = coalesce(try(local.checklist.location, null), var.regions.primary)
+    logging = var.regions.primary
     pubsub  = [var.regions.primary]
     kms     = var.regions.primary
   }
   # naming: environment used in most resource names
-  prefix               = join("-", compact([var.prefix, "prod"]))
-  kms_protection_level = coalesce(var.kms_protection_level, var.assured_workloads.regime == "FEDRAMP_MODERATE" ? "SOFTWARE" : "HSM")
+  prefix = join("-", compact([var.prefix, "prod"]))
 }

@@ -4,9 +4,9 @@ Cloud Foundation Fabric Detailed Deployment Guide
 
 | <strong>Created:</strong>             | June 04, 2023 |
 | :------------------------------------ | :------------ |
-| <strong>Updated:</strong>             | May 11, 2026  |
-| <strong>Version:</strong>             | v2.9.1        |
-| <strong>Most recent changes:</strong> | Refresh to v2.9.1|
+| <strong>Updated:</strong>             | September 28, 2026 |
+| <strong>Version:</strong>             | v4.1.0        |
+| <strong>Most recent changes:</strong> | [CHANGELOG.md](../CHANGELOG.md) |
 
 ##
 
@@ -75,7 +75,7 @@ To make using this deployment guide easier, the variables described below need t
 | <strong>Prefix</strong>               | `prefix`                         | This is the prefix appended to the beginning of projects and resources deployed selected by your or your organization. <strong>Full project names must be globally unique and the prefix must use a maximum of 7 characters</strong>. A 409 error will occur if a globally unique project name is not created. |
 | <strong>Region</strong>               | `assured_workloads.location`     | This is the (US) based region that we are deploying resources into (Dual regions like “NAM9” or continents are currently not supported)                                                                                                                                                                        |
 | <strong>Tenant Name</strong>          | `tenants` (Stage 1)              | The name for the first tenant that will be deployed via this document. <strong>Full project names must be globally unique and the tenant-name must use a maximum of 6 characters</strong>.                                                                                                                     |
-| <strong>Secondary Region</strong>     | `regions.secondary`              | The secondary region for resource deployment.                                                                                                                                                                                                                                                                  |
+| <strong>KMS Protection Level</strong> | `kms_protection_level`           | The Cloud KMS protection level required across every FAST stage (`0-bootstrap`, `1-resman`, `2-networking-a-fedramp`, `3-security`). Use `"HSM"` for FedRAMP High and IL5 compliance; `"SOFTWARE"` is permitted for FedRAMP Moderate.                                                                    |
 
 
 ## Prerequisites
@@ -146,26 +146,30 @@ permissions.**
   Admin
 - Follow the [Initial Groups and Administrative Access in Cloud Setup Steps 2
   and 3](https://console.cloud.google.com/cloud-setup/overview) instructions
-  adding all the below groups.
+  adding the required administrative groups bound by the FAST stages (`0-bootstrap/variables.tf` through `3-security`):
   - If prompted, skip the IDP step for now
 - Note: You do not have to complete subsequent steps but make sure you finish
   Step 2. Google may change their default group names. You can manually create
   the [group](https://console.cloud.google.com/iam-admin/groups) if it is not
   contained in the wizard.)
-  - gcp-billing-admins@`<domain>`
-  - gcp-developers@`<domain>`
-  - gcp-devops@`<domain>`
-  - gcp-hybrid-connectivity-admins@`<domain>`
-  - gcp-logging-monitoring-admins@`<domain>`
-  - gcp-logging-monitoring-viewers@`<domain>`
-  - gcp-organization-admins@`<domain>`
-  - gcp-vpc-network-admins@`<domain>`
-  - gcp-security-admins@`<domain>`
+
+  **Required FAST Stage Groups:**
+  - `gcp-billing-admins@<domain>`
+  - `gcp-devops@<domain>` (`gcp-support` is aliased to `gcp-devops`)
+  - `gcp-vpc-network-admins@<domain>`
+  - `gcp-organization-admins@<domain>`
+  - `gcp-security-admins@<domain>`
+
+  **Application / Optional Groups (defined in `docs/tdd.md` role mappings):**
+  - `gcp-developers@<domain>`
+  - `gcp-logging-admins@<domain>`
+  - `gcp-logging-viewers@<domain>`
+  - `gcp-monitoring-admins@<domain>`
 - We need to enable these Google Cloud Services by running the following
   script:
     - fast/stages-aw/0-bootstrap/enableServices.sh
       - If you run into issues with the above command, you can simply run the following deprecated command (on MacOS, works on other *nix variants)
-        - `echo "iam cloudkms pubsub serviceusage cloudresourcemanager bigquery assuredworkloads cloudbilling logging iamcredentials orgpolicy" | xargs -n1 -I {} gcloud services enable "{}.googleapis.com"`
+        - `echo "iam cloudkms pubsub serviceusage cloudresourcemanager bigquery assuredworkloads cloudbilling logging iamcredentials orgpolicy" | tr ' ' '\n' | xargs -I {} gcloud services enable "{}.googleapis.com"`
 - [Enable Access
   Transparency](https://console.cloud.google.com/iam-admin/settings) for your
   organization
@@ -211,6 +215,8 @@ billing_account = {
 regions = {
  primary = "`<region>`"
 }
+# KMS protection level: "HSM" for FedRAMP High and IL5 compliance; "SOFTWARE" permitted for FedRAMP Moderate. Required across all stages.
+kms_protection_level = "HSM"
 # use `gcloud organizations list`
 organization = {
  domain = "`<domain>`" # DISPLAY_NAME
@@ -265,11 +271,11 @@ alert_email = "`<alert_email>`"
 - Run `terraform init`
 - Run `terraform apply -var bootstrap_user=$(gcloud config list --format 'value(core.account)')`
   - Type `yes` when prompted
-  - **Note:** You may receive an error in this stage where it reports that
-    ‘bigquery.googleapis.com\` is not usable in the Assured Workloads. 
+  - **Note:** You may receive a `403` error in this stage:
+    `Request is disallowed by organization's constraints/gcp.restrictServiceUsage constraint ... attempting to use service 'bigquery.googleapis.com'`.
     - If you see this error, go to the [Assured Workloads
     ](https://console.cloud.google.com/compliance/assuredworkloads) page
-    - Click the  StellarEngine-`<compliance_regime>` folder (and Networking folder, if applicable)
+    - Click the `StellarEngine-<prefix>` folder (and Networking folder, if applicable)
     - Click “Review Available Updates”, 
     - Go to “Allowed Services”
     - Click “Allow services” to bring in the BigQuery family of APIs. 
@@ -363,6 +369,7 @@ ten-1 = { ## Change tenant_name here - 6 or less characters
   }
 ## You can have “n” number of tenants
 }
+kms_protection_level = "HSM"
 fast_features = {
  envs = true
 }
@@ -403,7 +410,7 @@ gcloud storage cp gs://${FAST_PREFIX}-prod-iac-core-outputs-0/tfvars/0-bootstrap
 
 - **Note:** If you are using an external billing account where the networking service account cannot be granted billing permissions, 
 you can use a **billing override** to run the project creation/billing links under your personal credentials. 
-To do this, define the `billing_override` variable in **fast/stages-aw/1-resman/terraform.tfvars** file
+To do this, define the `billing_override` variable in **fast/stages-aw/2-networking-a-fedramp/terraform.tfvars** file
 
   ```hcl
   billing_override = {
@@ -426,7 +433,7 @@ To do this, define the `billing_override` variable in **fast/stages-aw/1-resman/
   - Select a permission for the principal(s) from Select a role as “Billing
     Account Administrator”.
   - When done, click Save.
-- Change directory into **fast/stages-aw/2-networking-a-fedramp-high**
+- Change directory into **fast/stages-aw/2-networking-a-fedramp**
 - Copy the provider and global tfvars files from the GCS buckets:
 ```bash
 gcloud storage cp gs://${FAST_PREFIX}-prod-iac-core-outputs-0/providers/2-networking-providers.tf ./ && \
@@ -461,7 +468,7 @@ a VM code and register them. For more instructions, see the README in the the
 
 - **Note:** If you are using an external billing account where the networking service account cannot be granted billing permissions, 
 you can use a **billing override** to run the project creation/billing links under your personal credentials. 
-To do this, define the `billing_override` variable in **fast/stages-aw/1-resman/terraform.tfvars** file
+To do this, define the `billing_override` variable in **fast/stages-aw/2-networking-b-il5-ngfw/terraform.tfvars** file
 
   ```hcl
   billing_override = {
@@ -549,9 +556,9 @@ are responsible for the audit project.
   Billing Account Administrator for the following service account to the external billing account:**
   - `<prefix>`-security-0@`<prefix>`-prod-iac-core-0.iam.gserviceaccount.com
   
-- **Note:** If you are using an external billing account where the networking service account cannot be granted billing permissions, 
+- **Note:** If you are using an external billing account where the security service account cannot be granted billing permissions, 
 you can use a **billing override** to run the project creation/billing links under your personal credentials. 
-To do this, define the `billing_override` variable in **fast/stages-aw/1-resman/terraform.tfvars** file
+To do this, define the `billing_override` variable in **fast/stages-aw/3-security/terraform.tfvars** file
 
   ```hcl
   billing_override = {
@@ -636,7 +643,7 @@ Perform the following steps when adding or removing tenants projects for an exis
 
 #### Apply FAST Stage: 02-networking
 - Change directory into appropriate network folder for your Stellar Engine deployment:
-  - fast/stages-aw/2-networking-a-fedramp-high
+  - fast/stages-aw/2-networking-a-fedramp
   - fast/stages-aw/2-networking-b-il5-ngfw
 - Copy the 1-resman 1-resman tfvars file from the GCS bucket
   - `gcloud storage cp gs://${FAST_PREFIX}-prod-iac-core-outputs-0/tfvars/1-resman.auto.tfvars.json ./`
@@ -648,6 +655,23 @@ Perform the following steps when adding or removing tenants projects for an exis
 - Change directory into fast/stages-aw/3-security
 - `./sa_lockdown.sh`
 
+
+### Cross-Stage IAM Impersonation and Troubleshooting 403 Errors
+
+Each FAST deployment stage uses a dedicated least-privilege automation service account configured in its generated `*-providers.tf` file:
+
+| Stage | Expected Service Account Pattern | Primary Scope |
+| :--- | :--- | :--- |
+| `0-bootstrap` | `${FAST_PREFIX}-prod-bootstrap-0@${FAST_PREFIX}-prod-iac-core-0.iam.gserviceaccount.com` | Organization IAM, Assured Workloads, Stage 0 projects |
+| `1-resman` | `${FAST_PREFIX}-prod-resman-0@${FAST_PREFIX}-prod-iac-core-0.iam.gserviceaccount.com` | Stage folders, automation service accounts, CI/CD repositories |
+| `2-networking` | `${FAST_PREFIX}-prod-networking-0@${FAST_PREFIX}-prod-iac-core-0.iam.gserviceaccount.com` | Shared VPCs, firewall policies, interconnect/VPN, DNS |
+| `3-security` | `${FAST_PREFIX}-prod-security-0@${FAST_PREFIX}-prod-iac-core-0.iam.gserviceaccount.com` | KMS keys, VPC Service Controls, security projects |
+
+If you encounter `403 Forbidden` or `Permission 'iam.serviceAccounts.getAccessToken' denied` errors when transitioning between stages:
+
+1. Clear any stale shell impersonation variables. If `GOOGLE_IMPERSONATE_SERVICE_ACCOUNT` or `CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT` was exported while debugging a previous stage, it overrides the provider block in the current stage. Run `../../stage-links.sh <OUTPUTS_PATH>` (or `unset GOOGLE_IMPERSONATE_SERVICE_ACCOUNT CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT`) so Terraform uses the stage's `*-providers.tf` configuration.
+2. Verify that `./sa_lockdown.sh --enable` has been executed in `fast/stages-aw/3-security` if the deployment service accounts were previously disabled.
+3. Confirm that your active `gcloud auth list` identity is a member of the organization admins or devops group granted `roles/iam.serviceAccountTokenCreator` on the target stage service account.
 
 ### Additional Notes
 

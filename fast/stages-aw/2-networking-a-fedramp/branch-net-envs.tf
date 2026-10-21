@@ -56,9 +56,8 @@ module "env-spoke-projects" {
   metric_scopes = [module.vdss-host-project.project_id]
   iam = {
     "roles/dns.admin" = compact([
-      try(local.service_accounts.gke-dev, null),
-      try(local.service_accounts.project-factory-dev, null),
-      try(local.service_accounts.project-factory-prod, null),
+      try(local.service_accounts["gke-${lower(each.key)}"], null),
+      try(local.service_accounts["project-factory-${lower(each.key)}"], null),
     ])
   }
   #   # allow specific service accounts to assign a set of roles
@@ -96,7 +95,7 @@ module "env-spoke-vpc" {
     logging = var.dns.enable_logging
   }
   delete_default_routes_on_create = true
-  psa_configs                     = var.psa_ranges.dev
+  psa_configs                     = try(var.psa_ranges[lower(each.key)], var.psa_ranges.dev)
   # Set explicit routes for googleapis; send everything else to NVAs
   create_googleapis_routes = {
     private = true
@@ -154,6 +153,10 @@ resource "time_sleep" "peering_delay" {
 
   create_duration = "${index(keys(var.envs_folders), each.key) * 30}s"
 
+  triggers = {
+    local_network = module.env-spoke-vpc[each.key].self_link
+  }
+
   depends_on = [module.env-spoke-vpc]
 }
 
@@ -162,20 +165,16 @@ module "peering-envs" {
   for_each = var.envs_folders
 
   prefix        = lower("${each.key}-peering-0")
-  local_network = module.env-spoke-vpc[each.key].self_link
+  local_network = time_sleep.peering_delay[each.key].triggers["local_network"]
   peer_network  = module.vdss-vpc.self_link
   routes_config = {
     local = {
-      public_import = true
+      public_import = false
     }
     peer = {
-      public_export = true
+      public_export = false
     }
   }
-
-  depends_on = [
-    time_sleep.peering_delay
-  ]
 }
 
 # DNS

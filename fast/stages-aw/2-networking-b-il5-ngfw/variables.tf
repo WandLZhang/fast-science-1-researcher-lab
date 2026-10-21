@@ -68,6 +68,15 @@ variable "common_services_folder" {
   default     = null
 }
 
+variable "custom_roles" {
+  # tfdoc:variable:source 0-bootstrap
+  description = "Custom roles defined at the org level, in key => id format."
+  type = object({
+    service_project_network_admin = string
+  })
+  default = null
+}
+
 variable "dns" {
   description = "DNS configuration."
   type = object({
@@ -110,7 +119,7 @@ variable "factories_config" {
   type = object({
     data_dir              = optional(string, "data")
     dns_policy_rules_file = optional(string, "data/dns-policy-rules.yaml")
-    firewall_policy_name  = optional(string, "net-default")
+    firewall_policy_name  = optional(string)
   })
   default = {
     data_dir = "data"
@@ -119,10 +128,6 @@ variable "factories_config" {
   validation {
     condition     = var.factories_config.data_dir != null
     error_message = "Data folder needs to be non-null."
-  }
-  validation {
-    condition     = var.factories_config.firewall_policy_name != null
-    error_message = "Firewall policy name needs to be non-null."
   }
 }
 
@@ -181,6 +186,14 @@ variable "force_destroy" {
 variable "groups" {
   description = "IAM groups mapping."
   type        = any
+  default     = null
+}
+
+variable "kms_protection_level" {
+  # tfdoc:variable:source 0-bootstrap
+  description = "KMS protection level."
+  type        = string
+  nullable    = true
   default     = null
 }
 
