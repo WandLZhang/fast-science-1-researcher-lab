@@ -13,7 +13,7 @@ module "project-factory" {
 
   data_defaults = {
     billing_account  = "012345-67890A-BCDEF0"    # ← CHANGE: your billing account ID
-    parent           = "folders/NNNNNNNNNNNN"     # ← CHANGE: Prod folder from L0 Stage 1
+    parent           = "folders/NNNNNNNNNNNN"     # ← CHANGE: a department's Production folder from Stage 1 (1-resman folder_ids)
     prefix           = "univ"                     # ← CHANGE: your prefix from L0 Stage 0
     storage_location = "US"
   }
