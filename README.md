@@ -1,6 +1,6 @@
 # Fast Science L1 — Researcher Labs
 
-A fork of [Stellar Engine](https://github.com/google/stellar-engine) that provisions researcher projects on top of an [L0 foundation](https://github.com/WandLZhang/fast-science-0-stellar-engine). This repo helps IT administration create department folders and base projects. The researcher can then deploy a workload from the L2 catalog.
+This repo provisions researcher projects on the [landing zone](https://github.com/WandLZhang/fast-science-0-stellar-engine). It carries the landing zone's code plus this guide, so every step runs from here. IT creates department folders and base projects. The researcher then deploys a workload from the L2 catalog.
 
 ## Architecture
 
@@ -44,10 +44,10 @@ Fill in your values for researcher project provisioning. These feed into the pro
 |---|----------|-----------|---------------|
 | 1 | **L0 Prefix** (same prefix used in L0 Stage 0) | `________` | Used to find outputs bucket: `<prefix>-prod-iac-core-outputs-0` |
 | 2 | **Domain** (same as L0) | `________` | Email domain for admin groups in `departments.<dept>.iam_by_principals` and `department_admin_principals` |
-| 3 | **Department list** (e.g. `engineering`, `medicine`, `arts`) | `________` | One entry per department in `team_folders` tfvar; map key becomes folder name AND tag value |
+| 3 | **Department list** (e.g. `engineering`, `medicine`, `arts`) | `________` | One entry per department in the `departments` tfvar. The map key becomes the tag value and part of the service account and bucket names. `descriptive_name` becomes the folder name. |
 | 4 | **Per-department admin group** (e.g. `gcp-soe-admins@yourdomain.edu`) | `________` | `departments.<dept>.department_admin_principals` — gets folder-scoped `orgpolicy.policyAdmin` via IAM condition |
 | 5 | **Workload type** — `medsiglip-pathology`, `nextflow-batch`, or custom | `________` | Determines which APIs and IAM roles to include in PF YAML (if using PF) |
-| 6 | **Network project** (from L0 Stage 2 output, e.g. `net-prod-0`) | `________` | `shared_vpc_service_config.host_project` in PF YAML |
+| 6 | **Prod spoke host project** (from L0 Stage 2, e.g. `<prefix>-prod-net-spoke-0`) | `________` | `vpc_host_projects` in the PF stage's `main.tf`. The PF YAML's `host_project` uses its key, `prod-spoke-0`. |
 | 7 | **Subnet region/name** (from L0 Stage 2, e.g. `us-central1/prod-default`) | `________` | `service_agent_subnet_iam` key in PF YAML |
 | 8 | **Budget (monthly)** (optional) | `________` | Budget alert threshold |
 
@@ -112,7 +112,7 @@ Each researcher project gets:
 - Service account for the researcher's pipeline
 - Budget alerts
 
-> **Note:** All steps below are run from this repo (L1). Since L0 and L1 are both forks of the same upstream with the same code, modules, and shared Terraform state (GCS), you can also follow these steps from the [L0 repo](https://github.com/WandLZhang/fast-science-0-stellar-engine) if you prefer.
+> **Note:** The steps below run from this repo. It carries the landing zone's code and uses the same state buckets, so they also work from the [L0 repo](https://github.com/WandLZhang/fast-science-0-stellar-engine).
 
 ### Step 1 — Enable project factory (one-time prerequisite)
 
@@ -153,13 +153,14 @@ departments = {
 }
 ```
 
-`fast_features.teams = true` and `fast_features.project_factory = true` are defaults — you don't need to set them. If a `0-globals.auto.tfvars.json` from L0 overrides them, pass via `-var`:
+Department folders don't need `fast_features.teams`. Keep `fast_features.project_factory` true, the 0-bootstrap default, so the project factory service accounts get rights on each Development and Production folder.
 
 ```bash
 terraform init
 terraform apply
-# (only if overridden:) terraform apply -var='fast_features={teams=true, project_factory=true}'
 ```
+
+If you created department folders with this repo's earlier `team_folders` variable, rename it to `departments` and set `envs_folders = {}`. Drop any `cicd` blocks, because departments don't support them. Copy `fast/stages-aw/1-resman/edu-migration.tf.sample` to `edu-migration.tf` and fill in your department keys. The plan should show only moves. Delete the file after the apply.
 
 ### Step 2 — Set up the project factory stage
 
@@ -412,7 +413,12 @@ terraform plan      # review: per-dept folder + Dev/Prod subfolders + department
 terraform apply
 ```
 
-Capture the output `teams_folder_id` — you'll need it for the next two steps.
+List the department folder IDs. Steps B and D and the verify step use them:
+
+```bash
+terraform output -json departments | python3 -c \
+  'import json,sys; print(",".join(v["folder"] for v in json.load(sys.stdin).values()))'
+```
 
 #### Step B — Apply the baseline org policies on each department folder
 
@@ -438,7 +444,7 @@ What gets applied (on each department folder, inherited by its Development and P
 - `gcp.restrictServiceUsage` (allowlist of 37 research APIs including Marketplace partner model enablement, TPU, Earth Engine, Vision AI)
 - `vertexai.allowedPartnerModelFeatures` (allow web search + structured outputs for Anthropic Claude — **denied by default**, enforcement for Claude 4.x started July 2026)
 
-Department admins and PIs hold `roles/orgpolicy.policyAdmin` on their own folders, so they can override any of these for a specific lab or project (e.g., a sandbox project that needs a public IP).
+Department admins hold `roles/orgpolicy.policyAdmin` on their department's folders and projects through the tag-conditioned grant from `department_admin_principals`. They can override any of these for a lab or project, such as a sandbox project that needs a public IP. PIs get the same right only if you add the PI group to `department_admin_principals`.
 
 #### Step C — Grant `billing.user` on the master billing account
 
@@ -541,21 +547,13 @@ Same principle as L0 — minimize changes to upstream golden artifacts:
 
 ## Upstream Sync
 
-This repo tracks [google/stellar-engine](https://github.com/google/stellar-engine). Sync to a release tag, not `main` — releases carry migration notes.
+This repo follows [fast-science-0-stellar-engine](https://github.com/WandLZhang/fast-science-0-stellar-engine), which tracks google/stellar-engine releases. To update, merge the landing zone's `main`. Only this README and `background/` differ, so keep this repo's README.md when the merge conflicts on it.
 
 ```bash
-git remote add upstream https://github.com/google/stellar-engine.git
-git fetch upstream --tags
-git merge v4.0.0
+git remote add l0 https://github.com/WandLZhang/fast-science-0-stellar-engine.git
+git fetch l0
+git merge l0/main
 ```
-
-Three places conflict:
-
-- `fast/stages-aw/1-resman/` — L1 deleted `branch-envs.tf`, `branch-tenants.tf`, `kms.tf`, `log-metric-alerts.tf` and `outputs-tenants.tf` when department folders moved to the org root. Upstream still develops them. Keep them deleted.
-- `blueprints/research-delegation/` — local only.
-- `modules-v54/` and `fast/stages/2-networking/` — local only, vendored CFF v54.2.0.
-
-Minor versions tag on the last Friday of each month.
 
 ## Related Repos
 
