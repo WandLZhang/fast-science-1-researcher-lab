@@ -43,9 +43,9 @@ Fill in your values for researcher project provisioning. These feed into the pro
 | # | Question | Your Value | Where It Goes |
 |---|----------|-----------|---------------|
 | 1 | **L0 Prefix** (same prefix used in L0 Stage 0) | `________` | Used to find outputs bucket: `<prefix>-prod-iac-core-outputs-0` |
-| 2 | **Domain** (same as L0) | `________` | Email domain for admin groups in `team_folders.<dept>.iam_by_principals` and `department_admin_principals` |
+| 2 | **Domain** (same as L0) | `________` | Email domain for admin groups in `departments.<dept>.iam_by_principals` and `department_admin_principals` |
 | 3 | **Department list** (e.g. `engineering`, `medicine`, `arts`) | `________` | One entry per department in `team_folders` tfvar; map key becomes folder name AND tag value |
-| 4 | **Per-department admin group** (e.g. `gcp-soe-admins@yourdomain.edu`) | `________` | `team_folders.<dept>.department_admin_principals` — gets folder-scoped `orgpolicy.policyAdmin` via IAM condition |
+| 4 | **Per-department admin group** (e.g. `gcp-soe-admins@yourdomain.edu`) | `________` | `departments.<dept>.department_admin_principals` — gets folder-scoped `orgpolicy.policyAdmin` via IAM condition |
 | 5 | **Workload type** — `medsiglip-pathology`, `nextflow-batch`, or custom | `________` | Determines which APIs and IAM roles to include in PF YAML (if using PF) |
 | 6 | **Network project** (from L0 Stage 2 output, e.g. `net-prod-0`) | `________` | `shared_vpc_service_config.host_project` in PF YAML |
 | 7 | **Subnet region/name** (from L0 Stage 2, e.g. `us-central1/prod-default`) | `________` | `service_agent_subnet_iam` key in PF YAML |
@@ -57,7 +57,7 @@ Fill in your values for researcher project provisioning. These feed into the pro
 
 By this point L0 is assumed fully deployed (all ✅). This diagram tracks L1 project factory progress.
 
-**Unspecified regime** (default): L0 creates an `it-services` wrapper folder containing bootstrap + Networking + Security; L1 creates each department folder as a **sibling of `it-services`** at the org root. Each department folder is tagged `department=<name>` so L0's pre-created tag key + IAM conditions can give school admins folder-scoped org-policy authority without org-wide reach. For compliance regimes, both `it-services` content and department folders live inside the AW workload folder (named after the regime, e.g., `il5`).
+**Unspecified regime** (default): L0 creates an `it-services` wrapper folder containing bootstrap + Networking + Security; Stage 1 creates each department folder as a **sibling of `it-services`** at the org root. Each department folder is tagged `department=<name>` so L0's pre-created tag key + IAM conditions can give school admins folder-scoped org-policy authority without org-wide reach. For compliance regimes, both `it-services` content and department folders live inside the AW workload folder (named after the regime, e.g., `il5`).
 
 ```mermaid
 graph TB
@@ -72,13 +72,13 @@ graph TB
     IT --> P3["📦 PREFIX-prod-billing-exp-0<br/><i>✅ L0 — Billing Export</i>"]
 
     IT --> NET["📁 Networking<br/><i>✅ Deployed — L0</i>"]
-    NET --> P4["📦 PREFIX-net-core-0<br/><i>✅ Hub VPC + NCC Hub</i>"]
-    NET --> P5["📦 PREFIX-net-prod-0<br/><i>✅ Prod Spoke VPC</i>"]
+    NET --> P4["📦 PREFIX-prod-net-core-0<br/><i>✅ Hub VPC + NCC Hub</i>"]
+    NET --> P5["📦 PREFIX-prod-net-spoke-0<br/><i>✅ Prod Spoke VPC</i>"]
 
     IT --> SEC["📁 Security<br/><i>✅ Deployed — L0</i>"]
     SEC --> P9["📦 PREFIX-prod-sec-core-0<br/><i>✅ Prod KMS</i>"]
 
-    ORG --> ENG["📁 engineering<br/><i>⏳ Planned — L1 team_folders entry</i><br/>🏷️ department=engineering"]
+    ORG --> ENG["📁 engineering<br/><i>⏳ Planned — Stage 1 departments entry</i><br/>🏷️ department=engineering"]
     ENG --> ENGD["📁 Development<br/><i>⏳ sandbox preset (optional)</i>"]
     ENG --> ENGP["📁 Production<br/><i>⏳ hardened preset (optional)</i>"]
     ENGD --> RP1["📦 researcher projects<br/><i>⏳ IT (PF) or PIs (Console)</i>"]
@@ -128,7 +128,9 @@ cd fast/stages-aw/1-resman
 Create `terraform.tfvars` with your department definitions:
 
 ```hcl
-team_folders = {
+envs_folders = {}
+
+departments = {
   engineering = {
     descriptive_name            = "School of Engineering"
     iam_by_principals           = {
@@ -229,7 +231,7 @@ services:
 
 # Connect to L0 network (the spoke VPC from Stage 2 provides Cloud NAT for internet)
 shared_vpc_service_config:
-  host_project: net-prod-0          # network project from L0 Stage 2
+  host_project: prod-spoke-0        # key in main.tf's vpc_host_projects context
   service_agent_subnet_iam:
     "us-central1/prod-default":   # region/subnet-name
       - notebooks                           # Notebooks API agent
@@ -254,7 +256,7 @@ terraform apply
 This creates:
 
 ```
-📁 Prod
+📁 <department>/Production
 └── 📦 <prefix>-dept-a-researcher-1         (researcher's project)
     ├── Billing linked
     ├── Connected to L0 network (Cloud NAT for internet)
@@ -318,7 +320,7 @@ services:
   - notebooks.googleapis.com
 
 shared_vpc_service_config:
-  host_project: net-prod-0
+  host_project: prod-spoke-0
 
 service_accounts:
   dept-b-researcher-2-0:
@@ -347,8 +349,8 @@ GCP Org                                              (unspecified regime)
 │   ├── Networking                                 (L0 Stage 1)
 │   └── Security                                   (L0 Stage 1)
 │
-├── Engineering                                     (one team_folders entry per dept)
-│   │  Tagged: department=engineering              (L1 — google_tags_tag_binding)
+├── Engineering                                     (one departments entry per dept)
+│   │  Tagged: department=engineering              (Stage 1 — google_tags_tag_binding)
 │   │  IAM:
 │   │    - dept admin group: folderAdmin, projectCreator, billing.user
 │   │    - dept admin group: orgpolicy.policyAdmin at ORG with IAM condition
@@ -380,44 +382,43 @@ unspecified deployment's it-services folder and dept folders.)
 
 | Layer | Held by | Can do |
 |---|---|---|
-| **Org policies (baseline)** | IT, on each dept folder (or org-wide via L0) | Department-level baseline applies once and cascades to that dept's Dev/Prod subfolders. Folder-level **`sandbox`** / **`hardened`** presets are built in — opt in per-team via `dev_org_policies_preset` / `prod_org_policies_preset` in the `team_folders` tfvar. |
-| **Org policy overrides** | Dept admins, via `roles/orgpolicy.policyAdmin` granted at the org with an IAM condition restricting the role to resources tagged `department=<this dept>` | Loosen or tighten any inherited policy on their subtree. The predefined `orgpolicy.policyAdmin` is org-scope-only and its write permissions cannot be put in custom roles (verified empirically) — IAM conditions + tags are the [Google-documented pattern](https://cloud.google.com/iam/docs/conditions-overview) for folder-scoped delegation. Set `department_admin_principals` in your `team_folders` tfvars entry to opt in. |
+| **Org policies (baseline)** | IT, on each dept folder (or org-wide via L0) | Department-level baseline applies once and cascades to that dept's Dev/Prod subfolders. Folder-level **`sandbox`** / **`hardened`** presets are built in — opt in per department via `dev_org_policies_preset` / `prod_org_policies_preset` in the `departments` tfvar. |
+| **Org policy overrides** | Dept admins, via `roles/orgpolicy.policyAdmin` granted at the org with an IAM condition restricting the role to resources tagged `department=<this dept>` | Loosen or tighten any inherited policy on their subtree. The predefined `orgpolicy.policyAdmin` is org-scope-only and its write permissions cannot be put in custom roles (verified empirically) — IAM conditions + tags are the [Google-documented pattern](https://cloud.google.com/iam/docs/conditions-overview) for folder-scoped delegation. Set `department_admin_principals` in your `departments` tfvars entry to opt in. |
 | **Project creation** | PI group, in their dept folder via Console (or PI subfolder if used) | Click "New Project", pick parent = their folder, billing auto-attaches to master account. No IT round-trip. |
-| **Lien protection** | Central CF (Eventarc) | Auto-attaches deletion lien to every Console-created project under the Teams folder. PI-attempted delete returns FAILED_PRECONDITION. Lien removal requires IT. |
+| **Lien protection** | Central CF (Eventarc) | Auto-attaches deletion lien to every Console-created project under a department folder. PI-attempted delete returns FAILED_PRECONDITION. Lien removal requires IT. |
 | **Billing attachment** | PI group + team SA, on master billing account | `roles/billing.user` granted on the master account so PIs can link new projects without org-level billing rights. |
 | **Auditability** | Cloud Audit Logs, org sink | Every project create / IAM change is logged with the principal (PI directly OR team SA when impersonated). |
 
 ### Set up the delegation pattern (one-time)
 
 Pre-reqs: L0 Stages 0 + 1 + 2 already deployed (the green ✅ in the Deployment Map). You also need:
-- The numeric **org ID**, **master billing account ID**, **Workspace customer ID**, and your **L0 prefix**.
+- The numeric **org ID**, **master billing account ID**, and your **L0 prefix**.
 - Workspace / Cloud Identity groups created for each department: `<dept>-admins@<domain>` (small — chair / IT liaison) and `<dept>-pis@<domain>` (the PI list).
 
 Steps reference the blueprint files; copy each one into the location shown, fill in placeholders, then apply.
 
-#### Step A — Enable team folders in Stage 1
+#### Step A — Add department folders in Stage 1
 
 ```bash
-cp blueprints/research-delegation/team-folders/team-folders.example.tfvars \
-   fast/stages-aw/1-resman/<your-institution>-teams.auto.tfvars
+cp blueprints/research-delegation/departments/departments.example.tfvars \
+   fast/stages-aw/1-resman/<your-institution>-departments.auto.tfvars
 
-# Edit the copy: replace <UNIVERSITY_DOMAIN>, <PREFIX>, <AUTOMATION_PROJECT>,
-# and the example department keys (engineering, computational-sciences) with
-# your real units.
+# Edit the copy: replace <UNIVERSITY_DOMAIN> and the example department keys
+# (engineering, computational-sciences) with your real units.
 
 cd fast/stages-aw/1-resman
 terraform init
-terraform plan      # review: Teams folder + per-dept folder + Dev/Prod subfolders + scoped SA + GCS
+terraform plan      # review: per-dept folder + Dev/Prod subfolders + department tag + scoped SA + GCS
 terraform apply
 ```
 
 Capture the output `teams_folder_id` — you'll need it for the next two steps.
 
-#### Step B — Apply the baseline org policies on the Teams folder
+#### Step B — Apply the baseline org policies on each department folder
 
 ```bash
-export TEAMS_FOLDER_ID=<from Step A output>
-export CUSTOMER_ID=$(gcloud organizations list --format='value(directoryCustomerId)' | head -1)
+export DEPARTMENT_FOLDER_IDS=<comma-separated list from Step A>
+export ORG_ID=<your org ID>
 export UNIVERSITY_DOMAIN=<your.edu>
 
 cd blueprints/research-delegation/org-policies
@@ -426,7 +427,7 @@ cd blueprints/research-delegation/org-policies
 ./apply-policies.sh --enforce    # promote to enforced
 ```
 
-What gets applied (all at the Teams folder, inherited by every department):
+What gets applied (on each department folder, inherited by its Development and Production folders):
 - `iam.managed.disableServiceAccountKeyCreation` + `disableServiceAccountKeyUpload`
 - `iam.automaticIamGrantsForDefaultServiceAccounts` (deny)
 - `iam.managed.allowedPolicyMembers` (domain-restricted sharing)
@@ -434,8 +435,8 @@ What gets applied (all at the Teams folder, inherited by every department):
 - `gcp.resourceLocations` (US by default; edit `06-resource-locations.yaml` to change)
 - `compute.requireOsLogin`, `compute.vmExternalIpAccess` (deny), `compute.skipDefaultNetworkCreation`, `compute.disableSerialPortAccess`
 - `storage.uniformBucketLevelAccess`
-- `gcp.restrictServiceUsage` (allowlist of ~36 research APIs including Marketplace partner model enablement, TPU, Earth Engine, Vision AI)
-- `vertexai.allowedPartnerModelFeatures` (allow web search + structured outputs for Anthropic Claude — **denied by default**, enforcement for Claude 4.x starts July 2026)
+- `gcp.restrictServiceUsage` (allowlist of 37 research APIs including Marketplace partner model enablement, TPU, Earth Engine, Vision AI)
+- `vertexai.allowedPartnerModelFeatures` (allow web search + structured outputs for Anthropic Claude — **denied by default**, enforcement for Claude 4.x started July 2026)
 
 Department admins and PIs hold `roles/orgpolicy.policyAdmin` on their own folders, so they can override any of these for a specific lab or project (e.g., a sandbox project that needs a public IP).
 
@@ -465,11 +466,11 @@ terraform apply \
   -var "project_id=<PREFIX>-prod-iac-core-0" \
   -var "region=us-central1" \
   -var "organization_id=<ORG_ID>" \
-  -var "teams_folder_id=<TEAMS_FOLDER_ID>" \
+  -var 'department_folder_ids=["<DEPT_FOLDER_ID_1>","<DEPT_FOLDER_ID_2>"]' \
   -var "lien_reason=Research project — contact IT to request lien removal"
 ```
 
-The Terraform creates: a service account with `lienModifier` on the Teams folder, an org-level aggregated log sink, a Pub/Sub topic, and a Gen 2 Cloud Function. The function checks each `CreateProject` event's ancestry, and if the new project is under the Teams folder, attaches a deletion lien.
+The Terraform creates: a service account with `lienModifier` on each department folder, an org-level aggregated log sink, a Pub/Sub topic, and a Gen 2 Cloud Function. The function checks each `CreateProject` event's ancestry, and if the new project is under a department folder, attaches a deletion lien.
 
 #### Step E — Choose a project template
 
@@ -496,15 +497,15 @@ $EDITOR fast/stages-aw/3-project-factory-prod/data/projects/engineering-jdoe-gen
 cd fast/stages-aw/3-project-factory-prod && terraform apply
 ```
 
-PIs who'd rather skip Terraform can do it from the Console: **New Project → parent = their dept folder → master billing account**. Org policies inherit from the Teams folder; the auto-lien CF attaches a lien within seconds.
+PIs who'd rather skip Terraform can do it from the Console: **New Project → parent = their dept folder → master billing account**. Org policies inherit from the department folder; the auto-lien CF attaches a lien within seconds.
 
 ### Verify end-to-end
 
 ```bash
 export PREFIX=<your L0 prefix>
 export AUTOMATION_PROJECT=<PREFIX>-prod-iac-core-0
-export TEAMS_FOLDER_ID=<from Step A>
 export TEAM_KEY=engineering
+export DEPARTMENT_FOLDER_ID=<engineering's folder ID from Step A>
 export PI_GROUP=engineering-pis@<your.edu>
 export TEST_PROJECT_ID=engineering-jdoe-sandbox    # whatever you created in Step E
 
@@ -512,7 +513,7 @@ cd blueprints/research-delegation/billing
 ./grant-billing-and-verify.sh verify
 ```
 
-The script runs 6 check groups and reports `✓` / `✗` per assertion: team folder exists, team SA has the FAST-managed roles, PI group can impersonate, PI group has folderViewer + projectCreator, the 13 baseline org policies are set on the Teams folder, and the test project shows inherited `requireOsLogin` plus an attached lien plus a billing link.
+The script runs 6 check groups and reports `✓` / `✗` per assertion: department folder exists, team SA has the FAST-managed roles, PI group can impersonate, PI group has folderViewer + projectCreator, the 13 baseline org policies are set on the department folder, and the test project shows inherited `requireOsLogin` plus an attached lien plus a billing link.
 
 ### Operational decisions to make once
 
@@ -521,7 +522,7 @@ These are not in the artifacts because they depend on institutional context — 
 1. **Workspace group governance.** Who owns membership of `<dept>-pis@<domain>`? The dean? IT? An automated SIS feed? This is the new control point.
 2. **PI subfolder discipline.** Per-PI subfolders give per-PI cost rollup and IAM blast-radius control; flat-under-department is simpler. Recommended: subfolders for any department with >5 PIs.
 3. **Lien removal workflow.** When a PI legitimately wants to retire a project, what's the request path to IT? A Forms / ticketing intake, IT runs `gcloud alpha resource-manager liens delete`.
-4. **Org-policy exception process.** When a PI needs an exception that goes beyond their folder-scoped override capability (e.g., a service not in the Teams allowlist), how do they request it? Recommend a tag-conditional org policy applied per-project by IT.
+4. **Org-policy exception process.** When a PI needs an exception that goes beyond their folder-scoped override capability (e.g., a service not in the baseline allowlist), how do they request it? Recommend a tag-conditional org policy applied per-project by IT.
 5. **On-prem connectivity.** When (if) does the first lab need on-prem reach? L0 Stage 2 already ships the `hub-and-spokes-vpns` dataset and an NCC hub for opt-in spoke attachment.
 6. **Default service account hardening.** Disable default Compute Engine / App Engine SAs entirely (modern recommendation, set via `iam.automaticIamGrantsForDefaultServiceAccounts`) or just disable the legacy auto-grant? Affects what L1 PF YAMLs need.
 
@@ -531,9 +532,9 @@ Same principle as L0 — minimize changes to upstream golden artifacts:
 
 | ✅ Edit | 🚫 Don't Edit |
 |---------|---------------|
-| `terraform.tfvars` — tenant definitions | `*.tf` — stage logic |
+| `terraform.tfvars` — department definitions | `*.tf` — stage logic |
 | `data/*.yaml` — if using project factory | `modules/*` — upstream modules |
-| `blueprints/research-delegation/team-folders/*.tfvars` — your dept list | `fast/stages-aw/1-resman/branch-teams.tf` — folder/SA wiring |
+| `blueprints/research-delegation/departments/*.tfvars` — your dept list | `fast/stages-aw/1-resman/branch-edu.tf` — folder/SA wiring |
 | `blueprints/research-delegation/org-policies/*.yaml` — baseline policies | `modules/folder/`, `modules/organization/` — policy plumbing |
 | `blueprints/research-delegation/project-templates/*.yaml.sample` — copy + fill in per project | `modules/project/` — lien + org-policy plumbing |
 | `blueprints/research-delegation/auto-lien/variables.tf` inputs only | `blueprints/research-delegation/auto-lien/main.tf`, `function/main.py` — CF logic |
@@ -561,4 +562,4 @@ Minor versions tag on the last Friday of each month.
 | Layer | Repo | Purpose |
 |-------|------|---------|
 | **L0** | [fast-science-0-stellar-engine](https://github.com/WandLZhang/fast-science-0-stellar-engine) | GCP org landing zone (Stages 0-3) |
-| **L1** | This repo | Researcher project provisioning via tenants |
+| **L1** | This repo | Researcher project provisioning via department folders and the project factory |
