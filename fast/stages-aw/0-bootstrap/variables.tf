@@ -150,7 +150,7 @@ variable "fast_features" {
     gke             = optional(bool, false)
     project_factory = optional(bool, true)
     sandbox         = optional(bool, false)
-    teams           = optional(bool, true)
+    teams           = optional(bool, false)
   })
   default  = {}
   nullable = false
