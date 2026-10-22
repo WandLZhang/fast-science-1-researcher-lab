@@ -7,7 +7,7 @@
   - [Terraform variables configuration](#terraform-variables-configuration)
   - [Linking FAST output files](#linking-fast-output-files)
   - [Terraform init/apply cycle](#terraform-initapply-cycle)
-- [Default Dataset: Hub and Spoke with VPC Peering](#default-dataset-hub-and-spoke-with-vpc-peering)
+- [Default Dataset: Hub and Spoke with NCC](#default-dataset-hub-and-spoke-with-ncc)
 - [Design overview and choices](#design-overview-and-choices)
   - [Networking projects](#networking-projects)
   - [VPCs](#vpcs)
@@ -94,7 +94,7 @@ outputs_location = "~/fast-config"
 If you enabled local output files in the previous stage, run this command replacing the example path with the one for your output files.
 
 ```bash
-../fast-links.sh ~/fast-config
+../../stage-links.sh ~/fast-config
 
 # File linking commands for networking stage
 
@@ -103,7 +103,8 @@ ln -s ~/fast-config/providers/2-networking-providers.tf ./
 
 # input files from other stages
 ln -s ~/fast-config/tfvars/0-globals.auto.tfvars.json ./
-ln -s ~/fast-config/tfvars/0-org-setup.auto.tfvars.json ./
+ln -s ~/fast-config/tfvars/0-bootstrap.auto.tfvars.json ./
+ln -s ~/fast-config/tfvars/1-resman.auto.tfvars.json ./
 
 # conventional location for this stage terraform.tfvars (manually managed)
 ln -s ~/fast-config/2-networking.auto.tfvars ./
@@ -112,19 +113,20 @@ ln -s ~/fast-config/2-networking.auto.tfvars ./
 If you have no local output files, check the previous state's outputs for the name of your GCS outputs bucket and replace it in the example below.
 
 ```bash
-../fast-links.sh gs://myprefix-prod-iac-org-0-iac-outputs
+../../stage-links.sh gs://<prefix>-prod-iac-core-outputs-0
 
 # File linking commands for networking stage
 
 # provider file
-gcloud storage cp gs://myprefix-prod-iac-org-0-iac-outputs/providers/2-networking-providers.tf ./
+gcloud storage cp gs://<prefix>-prod-iac-core-outputs-0/providers/2-networking-providers.tf ./
 
 # input files from other stages
-gcloud storage cp gs://myprefix-prod-iac-org-0-iac-outputs/tfvars/0-globals.auto.tfvars.json ./
-gcloud storage cp gs://myprefix-prod-iac-org-0-iac-outputs/tfvars/0-org-setup.auto.tfvars.json ./
+gcloud storage cp gs://<prefix>-prod-iac-core-outputs-0/tfvars/0-globals.auto.tfvars.json ./
+gcloud storage cp gs://<prefix>-prod-iac-core-outputs-0/tfvars/0-bootstrap.auto.tfvars.json ./
+gcloud storage cp gs://<prefix>-prod-iac-core-outputs-0/tfvars/1-resman.auto.tfvars.json ./
 
 # conventional location for this stage terraform.tfvars (manually managed)
-gcloud storage cp gs://myprefix-prod-iac-org-0-iac-outputs/2-networking.auto.tfvars ./
+gcloud storage cp gs://<prefix>-prod-iac-core-outputs-0/2-networking.auto.tfvars ./
 ```
 
 Once you have one of the above outputs, copy/paste it in your terminal from within this stage's folder.
@@ -140,18 +142,11 @@ terraform init
 terraform apply
 ```
 
-## Default Dataset: Hub and Spoke with VPC Peering
+## Default Dataset: Hub and Spoke with NCC
 
-This stage includes a default dataset that implements a **Hub and Spoke** topology using [VPC Network Peering](https://cloud.google.com/vpc/docs/vpc-peering). This model is ideal for achieving network isolation between different environments (e.g., development and production) while centralizing shared services and connectivity in a hub network.
+The default dataset, `hub-and-spokes-ncc`, builds a hub VPC plus dev and prod spoke VPCs. Each VPC sits in its own Shared VPC host project in the Networking folder. A Network Connectivity Center hub joins them, and each spoke has its own Cloud NAT. Regions default to `us-east4` and `us-central1`; change them in `defaults.yaml`. The hub's sample HA VPN stays off until you edit `vpcs/hub/vpns/onprem.yaml` and remove `vpns: "none"` from `vpcs/hub/.config.yaml`.
 
-The architecture consists of:
-
-- A **hub VPC** (`hub`) for centralized resources, such as DNS and connectivity to on-premises networks (VPN).
-- Two **spoke VPCs** (`dev` and `prod`) for different environments.
-- **VPC Peering** connections between the hub and each spoke. Because peering is not transitive, the spokes are isolated from each other.
-- Each VPC is deployed in its own dedicated **Shared VPC host project**, allowing for clear separation of resources and IAM policies.
-
-For more details on this dataset, refer to its [dedicated README file](./datasets/hub-and-spokes-peerings/README.md).
+To use VPC peering instead, set `factories_config.dataset = "datasets/hub-and-spokes-peerings"`. Details: [NCC dataset README](./datasets/hub-and-spokes-ncc/README.md).
 
 ## Design overview and choices
 
