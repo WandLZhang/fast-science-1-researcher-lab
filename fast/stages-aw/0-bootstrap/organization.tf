@@ -293,11 +293,11 @@ locals {
   )
 }
 
-# Org-level tag key used by L1 to scope folder-level org-policy delegation.
-# Each L1 department folder gets a tag value under this key (= the team_folders
-# map entry's name, e.g., "engineering"), bound to the folder, and a
-# conditional org-level grant of roles/orgpolicy.policyAdmin to the
-# department's admin group with the IAM condition resource.matchTag(...).
+# Org-level tag key that 1-resman uses to scope folder-level org-policy
+# delegation. Each department folder (1-resman departments) gets a tag value
+# under this key (= the departments map key, e.g., "engineering"), bound to the
+# folder, and a conditional org-level grant of roles/orgpolicy.policyAdmin to
+# the department's admin group with the IAM condition resource.matchTag(...).
 #
 # Per https://cloud.google.com/iam/docs/conditions-overview — the only
 # supported way to give folder-scoped org-policy authority since the

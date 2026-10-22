@@ -35,7 +35,7 @@ module "project-factory" {
     # create VMs (workbench, batch) on the L0 shared subnet.
     context = {
       vpc_host_projects = {
-        "prod-spoke-0" = "univ-prod-net-host"    # ← CHANGE: your L0 Prod spoke host project ID
+        "prod-spoke-0" = "univ-prod-net-spoke-0" # ← CHANGE: your Prod spoke host project ID (NVA stages: univ-prod-net-host)
       }
     }
   }

@@ -74,7 +74,7 @@ services:
 # to the listed service agents so L2 workloads (Workbench, Batch, GKE) can
 # create VMs on the centrally managed subnets.
 shared_vpc_service_config:
-  host_project: <PREFIX>-prod-net-host
+  host_project: <PREFIX>-prod-net-spoke-0   # NCC default; NVA stages: <PREFIX>-prod-net-host
   service_agent_iam:
     "roles/compute.networkUser":
       - notebooks

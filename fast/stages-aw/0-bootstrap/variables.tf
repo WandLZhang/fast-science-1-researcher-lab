@@ -231,7 +231,7 @@ variable "managed_folder_name" {
 }
 
 variable "department_tag_key_name" {
-  description = "Short name of the org-level tag key used by L1 to scope folder-level org-policy admin delegation. Default \"department\" covers university schools/departments, federal-agency centers, and corporate divisions. Each L1 team_folders entry creates a tag value (= the entry's map key) under this key and binds it to the department folder; the department's admin group gets roles/orgpolicy.policyAdmin at org level with IAM condition resource.matchTag(\"<ORG>/<key>\", \"<value>\"), giving them folder-scoped org-policy authority."
+  description = "Short name of the org-level tag key that 1-resman uses to scope folder-level org-policy admin delegation. Default \"department\" covers university schools/departments, federal-agency centers, and corporate divisions. Each 1-resman departments entry creates a tag value (= the entry's map key) under this key and binds it to the department folder; the department's admin group gets roles/orgpolicy.policyAdmin at org level with IAM condition resource.matchTag(\"<ORG>/<key>\", \"<value>\"), giving them folder-scoped org-policy authority."
   type        = string
   default     = "department"
 }
