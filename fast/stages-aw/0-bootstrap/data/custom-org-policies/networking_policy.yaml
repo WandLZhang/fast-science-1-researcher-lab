@@ -67,11 +67,24 @@ compute.restrictPartnerInterconnectUsage:
 #   under:projects/PROJECT_ID,
 # or projects/PROJECT_ID/global/networks/NETWORK_NAME.
 # SHOULD HAVE
+#
+# under:folders/832634261155 is Google's Service Networking producer folder.
+# Private services access peers your VPCs with networks in it, so Cloud SQL,
+# Memorystore and Filestore private IP need this value. Google's docs don't
+# list the folder ID; these pages cover the constraint and the peering:
+#   https://docs.cloud.google.com/compute/docs/access/organization-policies
+#   https://docs.cloud.google.com/sql/docs/mysql/configure-private-ip
+# GKE private clusters that peer with their control plane (the legacy mode)
+# also need under:folders/391150242170. Clusters that use Private Service
+# Connect don't peer:
+#   https://docs.cloud.google.com/kubernetes-engine/docs/concepts/private-service-connect
 compute.restrictVpcPeering:
   rules:
   - allow:
       values:
         - under:organizations/${organization_id}
+        - under:folders/832634261155 # Service Networking (private services access)
+        # - under:folders/391150242170 # GKE control plane peering (legacy private clusters)
 
 %{ if !contains(["FEDRAMP_MODERATE"], regime) ~}
 # This list constraint defines the type of protocol forwarding rule objects
