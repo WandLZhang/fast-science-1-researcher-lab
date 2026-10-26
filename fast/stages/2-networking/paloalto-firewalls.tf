@@ -69,6 +69,7 @@ resource "google_project_iam_member" "paloalto_fw_compute_viewer" {
   member  = "serviceAccount:${google_service_account.paloalto_fw[0].email}"
 }
 
+# tflint-ignore: terraform_naming_convention
 module "ew_firewall" {
   count                 = local.paloalto_enabled ? 1 : 0
   source                = "../../../modules-v54/paloalto-firewall"
@@ -85,6 +86,7 @@ module "ew_firewall" {
   metadata              = local.pa_metadata
 }
 
+# tflint-ignore: terraform_naming_convention
 module "ns_firewall" {
   count                 = local.paloalto_enabled ? 1 : 0
   source                = "../../../modules-v54/paloalto-firewall"

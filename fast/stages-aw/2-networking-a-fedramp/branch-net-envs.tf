@@ -54,19 +54,36 @@ module "env-spoke-projects" {
     enabled = true
   }
   metric_scopes = [module.vdss-host-project.project_id]
-  iam = {
-    "roles/dns.admin" = compact([
-      try(local.service_accounts["gke-${lower(each.key)}"], null),
-      try(local.service_accounts["project-factory-${lower(each.key)}"], null),
-    ])
-    # Grant PF SA serviceProjectNetworkAdmin on spoke host so L1 project
-    # factory can attach service projects and grant subnet-level IAM
-    # (compute.networkUser) to service agents for L2 workloads
-    (local.custom_roles.service_project_network_admin) = compact([
-      try(local.service_accounts.project-factory-dev, null),
-      try(local.service_accounts.project-factory-prod, null),
-    ])
-  }
+  iam = merge(
+    lookup(var.spoke_project_iam, lower(each.key), lookup(var.spoke_project_iam, each.key, {})),
+    {
+      "roles/dns.admin" = distinct(concat(
+        compact([
+          try(local.service_accounts["gke-${lower(each.key)}"], null),
+          try(local.service_accounts["project-factory-${lower(each.key)}"], null),
+        ]),
+        lookup(
+          lookup(var.spoke_project_iam, lower(each.key), lookup(var.spoke_project_iam, each.key, {})),
+          "roles/dns.admin",
+          []
+        )
+      ))
+      # Grant PF SA serviceProjectNetworkAdmin on spoke host so L1 project
+      # factory can attach service projects and grant subnet-level IAM
+      # (compute.networkUser) to service agents for L2 workloads
+      (local.custom_roles.service_project_network_admin) = distinct(concat(
+        compact([
+          try(local.service_accounts.project-factory-dev, null),
+          try(local.service_accounts.project-factory-prod, null),
+        ]),
+        lookup(
+          lookup(var.spoke_project_iam, lower(each.key), lookup(var.spoke_project_iam, each.key, {})),
+          local.custom_roles.service_project_network_admin,
+          []
+        )
+      ))
+    }
+  )
   #   # allow specific service accounts to assign a set of roles
   #   iam_bindings = {
   #     sa_delegated_grants = {
@@ -220,7 +237,12 @@ module "env-dns-peer-landing-root" {
   }
 }
 
-resource "google_compute_subnetwork_iam_member" "allow-admin-principals" {
+moved {
+  from = google_compute_subnetwork_iam_member.allow-admin-principals
+  to   = google_compute_subnetwork_iam_member.allow_admin_principals
+}
+
+resource "google_compute_subnetwork_iam_member" "allow_admin_principals" {
   for_each = local.tenant_subnets_map_of_maps
   project  = module.env-spoke-projects[each.value.env].project_id
   region   = each.value.region

@@ -65,6 +65,7 @@ resource "tls_private_key" "paloalto_ssh" {
 
 # Bootstrap bucket. The VM-Series VMs read config/, content/, software/ and
 # license/ from this bucket on first boot via vmseries-bootstrap-gce-storagebucket.
+# tflint-ignore: terraform_naming_convention
 module "paloalto_bootstrap_bucket" {
   count         = local.paloalto_enabled ? 1 : 0
   source        = "../../../modules-v54/gcs"

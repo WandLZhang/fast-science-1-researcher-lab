@@ -17,6 +17,14 @@
 # tfdoc:file:description Organization-level IAM.
 
 locals {
+  essential_contacts = (
+    var.essential_contacts == null
+    ? {}
+    : try(
+      { for k, v in tomap(var.essential_contacts) : k => tolist(v) },
+      tostring(var.essential_contacts) == "" ? {} : { (tostring(var.essential_contacts)) = ["ALL"] }
+    )
+  )
   # reassemble logical bindings into the formats expected by the module
   _iam_bindings = merge(
     local.iam_domain_bindings,
@@ -235,6 +243,8 @@ resource "google_assured_workloads_workload" "primary" {
     create_before_destroy = true
     # Renames in code do NOT force AW folder recreation. The folder in GCP
     # keeps its original display_name. Existing deployments stay stable.
+    # The API never returns billing_account or resource_settings, which are
+    # input-only, so an imported workload would otherwise plan a replacement.
     ignore_changes = [billing_account, display_name, resource_settings]
   }
 }
@@ -393,6 +403,7 @@ module "organization" {
       }
     }
   )
+  contacts     = var.bootstrap_user != null ? {} : local.essential_contacts
   custom_roles = var.custom_roles
   factories_config = {
     custom_roles = var.factories_config.custom_roles

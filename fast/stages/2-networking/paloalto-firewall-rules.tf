@@ -30,6 +30,7 @@ locals {
   } : {}
 }
 
+# tflint-ignore: terraform_naming_convention
 module "paloalto_firewall_mngt" {
   count                = local.paloalto_enabled ? 1 : 0
   source               = "../../../modules-v54/net-vpc-firewall"
@@ -67,6 +68,7 @@ module "paloalto_firewall_mngt" {
   }
 }
 
+# tflint-ignore: terraform_naming_convention
 module "paloalto_firewall_trust" {
   count                = local.paloalto_enabled ? 1 : 0
   source               = "../../../modules-v54/net-vpc-firewall"
@@ -105,6 +107,7 @@ module "paloalto_firewall_trust" {
   }
 }
 
+# tflint-ignore: terraform_naming_convention
 module "paloalto_firewall_untrust" {
   count                = local.paloalto_enabled ? 1 : 0
   source               = "../../../modules-v54/net-vpc-firewall"

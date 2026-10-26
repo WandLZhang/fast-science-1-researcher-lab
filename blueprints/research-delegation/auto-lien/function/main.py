@@ -38,8 +38,8 @@ import logging
 import os
 from typing import Iterable
 
-import functions_framework
 from cloudevents.http import CloudEvent
+import functions_framework
 from google.cloud import resourcemanager_v3
 
 logging.basicConfig(level=logging.INFO)
@@ -70,10 +70,9 @@ def _project_id_from_audit(entry: dict) -> str | None:
     protoPayload.request.project.projectId once the operation completes
     (operation.last == true). Fall back to resourceName parsing."""
     payload = entry.get("protoPayload", {})
-    project_id = (
-        payload.get("request", {}).get("project", {}).get("projectId")
-        or payload.get("response", {}).get("projectId")
-    )
+    project_id = payload.get("request", {}).get("project", {}).get(
+        "projectId"
+    ) or payload.get("response", {}).get("projectId")
     if project_id:
         return project_id
     rn = payload.get("resourceName", "")
@@ -111,17 +110,25 @@ def _department_folder_of(project_id: str) -> str | None:
             seen_org = True
             break
     if not seen_org:
-        log.warning("walked past expected org while checking ancestry of %s", project_id)
+        log.warning(
+            "walked past expected org while checking ancestry of %s", project_id
+        )
     return None
 
 
 def _create_lien(project_id: str) -> None:
-    """Idempotent: if a lien with the same origin already exists on the project, skip."""
+    """Idempotent: if a lien with the same origin already exists on the
+    project, skip.
+    """
     client = resourcemanager_v3.LiensClient()
     parent = f"projects/{project_id}"
     for existing in client.list_liens(parent=parent):
         if existing.origin == LIEN_ORIGIN:
-            log.info("lien already present on %s (%s); skipping", project_id, existing.name)
+            log.info(
+                "lien already present on %s (%s); skipping",
+                project_id,
+                existing.name,
+            )
             return
     lien = resourcemanager_v3.Lien(
         parent=parent,
@@ -145,8 +152,10 @@ def handle_project_created(event: CloudEvent) -> None:
 
     project_id = _project_id_from_audit(entry)
     if not project_id:
-        log.info("audit entry has no project_id; ignoring (entry insertId=%s)",
-                 entry.get("insertId", "?"))
+        log.info(
+            "audit entry has no project_id; ignoring (entry insertId=%s)",
+            entry.get("insertId", "?"),
+        )
         return
 
     log.info("CreateProject event for project_id=%s", project_id)
@@ -157,9 +166,15 @@ def handle_project_created(event: CloudEvent) -> None:
         log.exception("ancestry check failed for project %s", project_id)
         return
     if department_folder is None:
-        log.info("project %s is not under a department folder; skipping", project_id)
+        log.info(
+            "project %s is not under a department folder; skipping", project_id
+        )
         return
-    log.info("project %s is under department folder %s", project_id, department_folder)
+    log.info(
+        "project %s is under department folder %s",
+        project_id,
+        department_folder,
+    )
 
     try:
         _create_lien(project_id)

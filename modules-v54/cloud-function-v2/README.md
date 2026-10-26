@@ -482,9 +482,9 @@ module "cf_http" {
 
 ## Fixtures
 
-- [cloudbuild-custom-pool.tf](../../tests/fixtures/cloudbuild-custom-pool.tf)
-- [functions-default-sa-iam-grants.tf](../../tests/fixtures/functions-default-sa-iam-grants.tf)
-- [pubsub.tf](../../tests/fixtures/pubsub.tf)
-- [shared-vpc.tf](../../tests/fixtures/shared-vpc.tf)
-- [vpc-connector.tf](../../tests/fixtures/vpc-connector.tf)
+- cloudbuild-custom-pool.tf
+- functions-default-sa-iam-grants.tf
+- pubsub.tf
+- shared-vpc.tf
+- vpc-connector.tf
 <!-- END TFDOC -->

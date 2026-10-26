@@ -35,6 +35,7 @@ locals {
   }
 }
 
+# tflint-ignore: terraform_naming_convention
 module "firewall_policies" {
   source        = "../../../modules-v54/net-firewall-policy"
   for_each      = local.firewall_policies

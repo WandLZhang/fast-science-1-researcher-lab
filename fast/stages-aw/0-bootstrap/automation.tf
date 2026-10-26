@@ -26,15 +26,14 @@ module "automation-project" {
   billing_account         = var.billing_account.id
   name                    = "iac-core-0"
   default_service_account = "deprivilege"
+  deletion_policy         = var.project_deletion_policies.automation
   lien_reason             = "Protected by default as a core project."
   parent = coalesce(
     var.project_parent_ids.automation, local.managed_folder_id
   )
   prefix = local.prefix
   contacts = (
-    var.bootstrap_user != null || var.essential_contacts == null
-    ? {}
-    : { (var.essential_contacts) = ["ALL"] }
+    var.bootstrap_user != null ? {} : local.essential_contacts
   )
   # human (groups) IAM bindings
   iam_by_principals = {
@@ -185,7 +184,12 @@ module "automation-project" {
   depends_on = [module.organization-logging]
 }
 
-resource "google_compute_project_metadata" "metadata-automation" {
+moved {
+  from = google_compute_project_metadata.metadata-automation
+  to   = google_compute_project_metadata.metadata_automation
+}
+
+resource "google_compute_project_metadata" "metadata_automation" {
   project = module.automation-project.project_id
   metadata = {
     block-project-ssh-keys = "TRUE" # CIS Compliance Benchmark 4.3

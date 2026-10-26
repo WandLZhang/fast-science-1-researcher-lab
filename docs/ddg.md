@@ -96,7 +96,8 @@ permissions.**
 ### Local Environment Setup:
 - Clone [Stellar Engine Github](https://github.com/google/stellar-engine/)
 - Install [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
-- Update local [Terraform](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli) to version >= 1.8.1
+- Install [Terraform](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli) at the version that the `required_version` constraints in `modules/*/versions.tf` require
+- Install [uv](https://docs.astral.sh/uv/getting-started/installation/) to run the `stellar` command from the `cli/` project
 - Install [jq binary](https://jqlang.github.io/jq/download/)
 
 ### Google Cloud Setup:
@@ -180,6 +181,9 @@ permissions.**
   quota is below 13
   - [View and Manage
     Quotas](https://cloud.google.com/docs/quotas/view-manage)
+- Verify the prerequisites with the `stellar preflight` command and fix every
+  failed check before Stage 0, as the [CLI README](../cli/README.md) describes
+  - `uv run --project cli stellar preflight --org <organization_id> --billing-account <billing_account_id> --project <bootstrap_project_id> --prefix <prefix> --regime <compliance_regime> --region <region>`
 
 ## Stage 0 - Bootstrap
 
@@ -444,6 +448,7 @@ gcloud storage cp gs://${FAST_PREFIX}-prod-iac-core-outputs-0/tfvars/1-resman.au
 - Copy the sample `terraform.tfvars` file and configure your network settings:
   - `cp terraform.tfvars.sample terraform.tfvars`
 - Update custom subnets, proxy subnets, firewall rules, named CIDRs, and DNS response policy rules directly inside **`terraform.tfvars`**.
+- Replace every `<region>` placeholder in **`terraform.tfvars`** with the `regions.primary` value from the Stage 0 **`terraform.tfvars`** file.
 - Run `terraform init`
   - `terraform apply`
   - Type `yes` when prompted
@@ -502,6 +507,7 @@ gcloud storage cp gs://${FAST_PREFIX}-prod-iac-core-outputs-0/tfvars/1-resman.au
 - Copy the sample `terraform.tfvars` file and configure your network settings:
   - `cp terraform.tfvars.sample terraform.tfvars`
 - Update custom subnets (including mgmt), proxy subnets, firewall rules, named CIDRs, and DNS response policy rules directly inside **`terraform.tfvars`**.
+- Replace every `<region>` placeholder in **`terraform.tfvars`** with the `regions.primary` value from the Stage 0 **`terraform.tfvars`** file.
 - Run `terraform init`
 - Run `terraform apply`
   - Type `yes` when prompted
@@ -664,8 +670,8 @@ Each FAST deployment stage uses a dedicated least-privilege automation service a
 | :--- | :--- | :--- |
 | `0-bootstrap` | `${FAST_PREFIX}-prod-bootstrap-0@${FAST_PREFIX}-prod-iac-core-0.iam.gserviceaccount.com` | Organization IAM, Assured Workloads, Stage 0 projects |
 | `1-resman` | `${FAST_PREFIX}-prod-resman-0@${FAST_PREFIX}-prod-iac-core-0.iam.gserviceaccount.com` | Stage folders, automation service accounts, CI/CD repositories |
-| `2-networking` | `${FAST_PREFIX}-prod-networking-0@${FAST_PREFIX}-prod-iac-core-0.iam.gserviceaccount.com` | Shared VPCs, firewall policies, interconnect/VPN, DNS |
-| `3-security` | `${FAST_PREFIX}-prod-security-0@${FAST_PREFIX}-prod-iac-core-0.iam.gserviceaccount.com` | KMS keys, VPC Service Controls, security projects |
+| `2-networking` | `${FAST_PREFIX}-prod-resman-net-0@${FAST_PREFIX}-prod-iac-core-0.iam.gserviceaccount.com` | Shared VPCs, firewall policies, interconnect/VPN, DNS |
+| `3-security` | `${FAST_PREFIX}-security-0@${FAST_PREFIX}-prod-iac-core-0.iam.gserviceaccount.com` | KMS keys, VPC Service Controls, security projects |
 
 If you encounter `403 Forbidden` or `Permission 'iam.serviceAccounts.getAccessToken' denied` errors when transitioning between stages:
 

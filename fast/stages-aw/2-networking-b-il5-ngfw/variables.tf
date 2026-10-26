@@ -109,9 +109,17 @@ variable "envs_folders" {
 }
 
 variable "essential_contacts" {
-  description = "Email used for essential contacts, unset if null."
-  type        = string
-  default     = null
+  description = "Email or map of emails to notification category lists used for essential contacts, unset if null or empty."
+  type        = any
+  default     = {}
+  validation {
+    condition = (
+      var.essential_contacts == null ||
+      can(tostring(var.essential_contacts)) ||
+      can({ for k, v in tomap(var.essential_contacts) : k => tolist(v) })
+    )
+    error_message = "essential_contacts must be null, a single email string, or a map of email strings to notification category lists."
+  }
 }
 
 variable "factories_config" {
@@ -285,6 +293,13 @@ variable "service_accounts" {
   default = null
 }
 
+variable "spoke_project_iam" {
+  description = "Additional authoritative IAM bindings for environment spoke host projects, keyed by environment name (for example dev or prod) and role."
+  type        = map(map(list(string)))
+  default     = {}
+  nullable    = false
+}
+
 variable "subnets" {
   description = "VPC subnet configurations keyed by network name."
   type = map(list(object({
@@ -307,6 +322,27 @@ variable "subnets" {
   })))
   default  = {}
   nullable = false
+  validation {
+    condition = alltrue(flatten([
+      for net in ["landing", "dmz", "mgmt"] : [
+        for r in values(var.regions) :
+        contains([
+          for s in try(var.subnets[net], []) :
+          s.region if s.name == "${net}-default"
+        ], r)
+      ]
+    ]))
+    error_message = "subnets.landing, dmz and mgmt need a <net>-default subnet in every region."
+  }
+  validation {
+    condition = alltrue([
+      for k in keys(var.envs_folders) :
+      try([
+        for s in var.subnets[lower(k)] : s if s.tenant != null
+      ][0].region, null) == var.regions.primary
+    ])
+    error_message = "The first tenant subnet of each environment must be in regions.primary."
+  }
 }
 
 variable "tenant_accounts" {

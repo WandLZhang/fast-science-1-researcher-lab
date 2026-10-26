@@ -16,14 +16,19 @@ data "google_project" "project" {
   project_id = var.project_id
 }
 
-resource "google_service_account" "gitlab-sa" {
+moved {
+  from = google_service_account.gitlab-sa
+  to   = google_service_account.gitlab_sa
+}
+
+resource "google_service_account" "gitlab_sa" {
   account_id   = var.sa
   display_name = "gitlab-sa"
 }
 resource "google_project_iam_member" "gke_cluster_admin" {
   project = data.google_project.project.project_id
   role    = "roles/container.admin"
-  member  = "serviceAccount:${google_service_account.gitlab-sa.email}"
+  member  = "serviceAccount:${google_service_account.gitlab_sa.email}"
 }
 
 resource "google_project_service" "storagetransfer_api" {
@@ -43,7 +48,7 @@ resource "google_project_iam_member" "compute_agent_subnet_user" {
     compute_agent = "serviceAccount:service-${data.google_project.project.number}@compute-system.iam.gserviceaccount.com"
     gke_agent     = "serviceAccount:service-${data.google_project.project.number}@container-engine-robot.iam.gserviceaccount.com"
     cloudservices = "serviceAccount:${data.google_project.project.number}@cloudservices.gserviceaccount.com"
-    gitlab_sa     = "serviceAccount:${google_service_account.gitlab-sa.email}"
+    gitlab_sa     = "serviceAccount:${google_service_account.gitlab_sa.email}"
   }
   project = var.net_project
   role    = "roles/compute.networkUser"
@@ -55,7 +60,7 @@ resource "google_kms_crypto_key_iam_member" "compute_service_agent_kms_permissio
     compute_agent = "serviceAccount:service-${data.google_project.project.number}@compute-system.iam.gserviceaccount.com"
     gke_agent     = "serviceAccount:service-${data.google_project.project.number}@container-engine-robot.iam.gserviceaccount.com"
     cloudservices = "serviceAccount:${data.google_project.project.number}@cloudservices.gserviceaccount.com"
-    gitlab_sa     = "serviceAccount:${google_service_account.gitlab-sa.email}"
+    gitlab_sa     = "serviceAccount:${google_service_account.gitlab_sa.email}"
   }
   crypto_key_id = var.kms_key
   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
@@ -137,7 +142,7 @@ module "compute-vm" {
     kms_key_self_link = var.kms_key
   }
   service_account = {
-    email = google_service_account.gitlab-sa.email
+    email = google_service_account.gitlab_sa.email
   }
   metadata = {
     startup-script = <<-EOT
@@ -258,13 +263,18 @@ module "cluster" {
   depends_on          = [google_kms_crypto_key_iam_member.compute_service_agent_kms_permissions, google_project_iam_member.compute_agent_subnet_user, google_project_iam_member.gke_host_agent_use, google_project_iam_member.gke_cluster_admin]
 }
 
-module "gke_node_pool" {
+moved {
+  from = module.gke_node_pool
+  to   = module.gke-node-pool
+}
+
+module "gke-node-pool" {
   source       = "../../../modules/gke-nodepool"
   project_id   = var.project_id
   location     = var.region
   cluster_name = var.gke_name
   service_account = {
-    email = google_service_account.gitlab-sa.email
+    email = google_service_account.gitlab_sa.email
   }
   name       = "nodes"
   node_count = var.nodepool_node_count

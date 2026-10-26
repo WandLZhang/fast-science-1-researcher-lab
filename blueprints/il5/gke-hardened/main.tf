@@ -169,9 +169,9 @@ module "cluster" {
     }
   }
   enable_features = {
-    enable_shielded_nodes = true
-    dataplane_v2          = true
-    binary_authorization  = true
+    shielded_nodes       = true
+    dataplane_v2         = true
+    binary_authorization = true
     database_encryption = {
       state    = "ENCRYPTED"
       key_name = module.kms.keys.default.id
@@ -184,7 +184,12 @@ module "cluster" {
   depends_on = [module.vpc, module.kms]
 }
 
-module "cluster_nodepool" {
+moved {
+  from = module.cluster_nodepool
+  to   = module.cluster-nodepool
+}
+
+module "cluster-nodepool" {
   source       = "../../../modules/gke-nodepool"
   project_id   = var.main_project_id
   cluster_name = var.gke_cluster_name
@@ -250,7 +255,12 @@ module "compute-vm" {
   depends_on = [module.cluster]
 }
 
-resource "google_compute_firewall" "allow-iap" {
+moved {
+  from = google_compute_firewall.allow-iap
+  to   = google_compute_firewall.allow_iap
+}
+
+resource "google_compute_firewall" "allow_iap" {
   name          = "${var.network_name}-allow-iap"
   description   = "Allow IAP for connecting to GKE from bastion host."
   network       = var.network_name
@@ -267,7 +277,12 @@ resource "google_compute_firewall" "allow-iap" {
   depends_on  = [module.vpc]
 }
 
-resource "google_compute_firewall" "allow-local-connect" {
+moved {
+  from = google_compute_firewall.allow-local-connect
+  to   = google_compute_firewall.allow_local_connect
+}
+
+resource "google_compute_firewall" "allow_local_connect" {
   count         = 1
   name          = "${var.network_name}-allow-local-connect"
   description   = "Allow for connecting to bastion host from local system."

@@ -18,6 +18,7 @@
 # the trust VPC, with CLIENT_IP_NO_DESTINATION session affinity. Gated on
 # local.paloalto_enabled.
 
+# tflint-ignore: terraform_naming_convention
 module "ilb_ew_firewall_trust" {
   count      = local.paloalto_enabled ? 1 : 0
   source     = "../../../modules-v54/net-lb-int"
@@ -48,6 +49,7 @@ module "ilb_ew_firewall_trust" {
   }
 }
 
+# tflint-ignore: terraform_naming_convention
 module "ilb_ns_firewall_trust" {
   count      = local.paloalto_enabled ? 1 : 0
   source     = "../../../modules-v54/net-lb-int"

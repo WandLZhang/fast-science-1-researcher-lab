@@ -185,17 +185,3 @@ resource "google_organization_iam_member" "edu_department_orgpolicy_admin" {
     expression  = "resource.matchTag(\"${var.department_tag.org_id}/${var.department_tag.key_short_name}\", \"${each.value.dept_key}\")"
   }
 }
-
-output "departments" {
-  description = "Department folders, with their state bucket and service account."
-  value = {
-    for k, v in module.branch-edu-folder : k => {
-      folder          = v.id
-      dev_folder      = module.branch-edu-dev-folder[k].id
-      prod_folder     = module.branch-edu-prod-folder[k].id
-      gcs_bucket      = module.branch-edu-gcs[k].name
-      service_account = module.branch-edu-sa[k].email
-      tag_value       = google_tags_tag_value.edu_department[k].id
-    }
-  }
-}

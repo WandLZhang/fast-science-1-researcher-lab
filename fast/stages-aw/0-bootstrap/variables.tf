@@ -124,10 +124,24 @@ variable "custom_roles" {
   default     = {}
 }
 
-variable "essential_contacts" {
-  description = "Email used for essential contacts, unset if null."
+variable "department_tag_key_name" {
+  description = "Short name of the org-level tag key that 1-resman uses to scope folder-level org-policy admin delegation. Default \"department\" covers university schools/departments, federal-agency centers, and corporate divisions. Each 1-resman departments entry creates a tag value (= the entry's map key) under this key and binds it to the department folder; the department's admin group gets roles/orgpolicy.policyAdmin at org level with IAM condition resource.matchTag(\"<ORG>/<key>\", \"<value>\"), giving them folder-scoped org-policy authority."
   type        = string
-  default     = null
+  default     = "department"
+}
+
+variable "essential_contacts" {
+  description = "Email or map of emails to notification category lists used for essential contacts, unset if null or empty."
+  type        = any
+  default     = {}
+  validation {
+    condition = (
+      var.essential_contacts == null ||
+      can(tostring(var.essential_contacts)) ||
+      can({ for k, v in tomap(var.essential_contacts) : k => tolist(v) })
+    )
+    error_message = "essential_contacts must be null, a single email string, or a map of email strings to notification category lists."
+  }
 }
 
 variable "factories_config" {
@@ -224,18 +238,6 @@ variable "iam_by_principals" {
   nullable    = false
 }
 
-variable "managed_folder_name" {
-  description = "Display name for the top-level managed folder. Defaults: \"it-services\" for COMPLIANCE_REGIME_UNSPECIFIED (regular folder at org root); regime short code (\"il5\", \"frh\") for compliance regimes (the AW workload folder itself). Override to rename — note that changing this after deployment renames the GCP folder but never forces recreation (display_name is in lifecycle.ignore_changes for the AW workload)."
-  type        = string
-  default     = null
-}
-
-variable "department_tag_key_name" {
-  description = "Short name of the org-level tag key that 1-resman uses to scope folder-level org-policy admin delegation. Default \"department\" covers university schools/departments, federal-agency centers, and corporate divisions. Each 1-resman departments entry creates a tag value (= the entry's map key) under this key and binds it to the department folder; the department's admin group gets roles/orgpolicy.policyAdmin at org level with IAM condition resource.matchTag(\"<ORG>/<key>\", \"<value>\"), giving them folder-scoped org-policy authority."
-  type        = string
-  default     = "department"
-}
-
 variable "kms_protection_level" {
   description = "KMS protection level. Null falls back to the regime-aware default in main.tf: SOFTWARE for FEDRAMP_MODERATE, HSM otherwise. Upstream ships this with no default, which makes it a required input (google/stellar-engine#231)."
   type        = string
@@ -307,6 +309,12 @@ variable "logging_kms_key" {
   default     = null
 }
 
+variable "managed_folder_name" {
+  description = "Display name for the top-level managed folder. Defaults: \"it-services\" for COMPLIANCE_REGIME_UNSPECIFIED (regular folder at org root); regime short code (\"il5\", \"frh\") for compliance regimes (the AW workload folder itself). Override to rename — note that changing this after deployment renames the GCP folder but never forces recreation (display_name is in lifecycle.ignore_changes for the AW workload)."
+  type        = string
+  default     = null
+}
+
 variable "org_policies_config" {
   description = "Organization policies customization. import_existing lists org policies that already exist on the organization (for example from Google Cloud Setup or Foundation Builder), so the stage imports them instead of failing with ALREADY_EXISTS."
   type = object({
@@ -346,6 +354,24 @@ variable "prefix" {
   validation {
     condition     = try(length(var.prefix), 0) <= 7
     error_message = "Use a maximum of 7 characters for prefix."
+  }
+}
+
+variable "project_deletion_policies" {
+  description = "Deletion policy of each Stage 0 project. Use ABANDON for projects that you create outside Terraform and import, so terraform destroy leaves them in place."
+  type = object({
+    automation = optional(string, "DELETE")
+    billing    = optional(string, "DELETE")
+    logging    = optional(string, "DELETE")
+  })
+  nullable = false
+  default  = {}
+  validation {
+    condition = alltrue([
+      for v in values(var.project_deletion_policies) :
+      contains(["ABANDON", "DELETE", "PREVENT"], v)
+    ])
+    error_message = "Each project deletion policy must be one of 'ABANDON', 'DELETE', 'PREVENT'."
   }
 }
 
