@@ -27,6 +27,9 @@
 # - Terraform provider versions stay out of scope. The default-versions.tf
 #   file sets them for every versions.tf copy at once, and tools/lint.sh
 #   expects the copies to match it.
+# - This fork sets open-pull-requests-limit to 0 on every entry, which stops
+#   version-update pull requests. The fork takes its pins from upstream
+#   release tags. The limit doesn't apply to security updates.
 
 version: 2
 
@@ -35,6 +38,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
     cooldown:
       default-days: 14
     commit-message:
@@ -54,6 +58,7 @@ updates:
       - "/cli"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
     cooldown:
       default-days: 14
     commit-message:
@@ -71,6 +76,7 @@ updates:
     directory: "/blueprints/gemini-enterprise/analytics"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
     cooldown:
       default-days: 14
     commit-message:
@@ -83,6 +89,7 @@ updates:
     directory: "/blueprints/fedramp-high/cloud-functions/src-code"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
     cooldown:
       default-days: 14
     commit-message:
