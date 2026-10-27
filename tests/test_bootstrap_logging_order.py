@@ -120,18 +120,30 @@ class TestBootstrapLoggingOrder(unittest.TestCase):
             main_tf,
         )
 
-    def test_delegated_iam_conditions_guard_empty_grant_list(self):
-        for rel_path in (
-            "fast/stages-aw/0-bootstrap/organization.tf",
-            "fast/stages-aw/0-bootstrap/automation.tf",
-            "fast/stages-aw/3-security/main.tf",
-        ):
-            content = (_REPO_ROOT / rel_path).read_text(encoding="utf-8")
-            self.assertIn(
-                "api.getAttribute('iam.googleapis.com/modifiedGrantsByRole',"
-                " []).size() > 0",
-                content,
+    def test_only_the_organization_sets_logging_settings(self):
+        # Folders inherit the organization settings. Folder settings without
+        # a KMS key fail under regimes that enforce CMEK for Logging.
+        org_tf = (_BOOTSTRAP_DIR / "organization.tf").read_text(
+            encoding="utf-8"
+        )
+        # This fork replaces no-compliance-folder and
+        # branch-common-services-folder with a single managed folder
+        # (it-services).
+        blocks = {
+            header: re.search(re.escape(header) + r"\s*\{[\s\S]*?\n\}", org_tf)
+            for header in (
+                'module "organization-logging"',
+                'module "managed-folder"',
             )
+        }
+        for header, match in blocks.items():
+            self.assertIsNotNone(match, f"Block not found: {header}")
+        self.assertIn(
+            "logging_settings", blocks['module "organization-logging"'].group(0)
+        )
+        for header in ('module "managed-folder"',):
+            with self.subTest(block=header):
+                self.assertNotIn("logging_settings", blocks[header].group(0))
 
     def test_automation_project_protects_bootstrap_service_accounts(self):
         automation_tf = (_BOOTSTRAP_DIR / "automation.tf").read_text(

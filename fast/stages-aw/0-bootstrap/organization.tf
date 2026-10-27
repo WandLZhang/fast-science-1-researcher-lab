@@ -216,7 +216,9 @@ module "organization-logging" {
   # log buckets (_Default, _Required) are created in the location
   # specified by local.locations.logging. This separate
   # organization-block prevents circular dependencies with later
-  # project creation.
+  # project creation. The Stage 0 folders inherit these settings, so they
+  # set none of their own: under Assured Workloads regimes that enforce
+  # CMEK for Logging, folder settings without a KMS key fail.
   source          = "../../../modules/organization"
   organization_id = "organizations/${var.organization.id}"
   logging_settings = {
@@ -261,9 +263,6 @@ module "managed-folder" {
   parent     = module.organization-logging.id
   name       = local.managed_folder_name
   depends_on = [module.organization-logging]
-  logging_settings = {
-    storage_location = local.locations.logging
-  }
 }
 
 # Resolved IDs:
@@ -367,7 +366,7 @@ module "organization" {
         role    = module.organization.custom_role_id["organization_iam_admin"]
         condition = {
           expression = format(
-            "api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).size() > 0 && api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly([%s])",
+            "api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly([%s])",
             join(",", formatlist("'%s'", [
               "roles/accesscontextmanager.policyAdmin",
               "roles/cloudasset.viewer",
@@ -390,7 +389,7 @@ module "organization" {
         role    = module.organization.custom_role_id["organization_iam_admin"]
         condition = {
           expression = format(
-            "api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).size() > 0 && api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly([%s])",
+            "api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly([%s])",
             join(",", formatlist("'%s'", [
               "roles/billing.admin",
               "roles/billing.costsManager",

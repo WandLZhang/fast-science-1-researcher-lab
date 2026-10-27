@@ -14,6 +14,7 @@
 
 import json
 import pathlib
+import string
 import unittest
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -28,8 +29,20 @@ class TestDataStores(unittest.TestCase):
         self.assertTrue(gen_id.startswith(prefix))
         self.assertEqual(len(gen_id), len(prefix) + 6)
         suffix = gen_id[len(prefix) :]
-        self.assertTrue(suffix.isalnum())
-        self.assertTrue(suffix.islower())
+        # str.islower() is False for an all-digit suffix, which the
+        # alphabet allows, so check the characters against it instead.
+        self.assertLessEqual(
+            set(suffix), set(string.ascii_lowercase + string.digits)
+        )
+
+    def test_generate_id_allows_an_all_digit_suffix(self):
+        with patch.object(data_stores.secrets, "choice", return_value="7"):
+            gen_id = data_stores.generate_id("ds-")
+        self.assertEqual(gen_id, "ds-777777")
+        self.assertLessEqual(
+            set(gen_id[len("ds-") :]),
+            set(string.ascii_lowercase + string.digits),
+        )
 
     def test_generate_id_uniqueness(self):
         prefix = "test-"
