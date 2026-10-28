@@ -97,9 +97,13 @@ module "branch-edu-gcs" {
   location      = var.regions.primary
   storage_class = local.gcs_storage_class
   versioning    = true
+  force_destroy = var.force_destroy
   iam = {
     "roles/storage.objectAdmin" = [module.branch-edu-sa[each.key].iam_email]
   }
+
+  encryption_key = "projects/${var.automation.project_id}/locations/${var.regions.primary}/keyRings/gcs/cryptoKeys/gcs"
+  depends_on     = [google_kms_crypto_key_iam_member.resman_bootstrap_kms]
 }
 
 # per-department environment folders where project factory SAs can create projects
