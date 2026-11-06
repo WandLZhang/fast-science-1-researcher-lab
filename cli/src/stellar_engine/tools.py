@@ -23,7 +23,7 @@ _TIMEOUT_SECONDS = 30
 
 
 class LocalTools(Protocol):
-    """Local tool queries used by preflight checks."""
+    """Local tool queries used by preflight checks and rendering."""
 
     def terraform_version(self) -> str | None:
         """Returns the installed Terraform version, or None if missing."""
@@ -45,8 +45,15 @@ class LocalTools(Protocol):
         """Returns the installed jq version, or None if missing."""
         ...
 
+    def terraform_fmt(self, text: str) -> str | None:
+        """Returns `text` formatted by `terraform fmt`.
 
-def _run(args):
+        Returns None when Terraform is missing or rejects the text.
+        """
+        ...
+
+
+def _run(args, stdin=None):
     """Runs a command and returns its stdout, or None on any failure."""
     if shutil.which(args[0]) is None:
         return None
@@ -55,6 +62,7 @@ def _run(args):
             args,
             capture_output=True,
             check=True,
+            input=stdin,
             text=True,
             timeout=_TIMEOUT_SECONDS,
         )
@@ -93,3 +101,8 @@ class SystemTools:
     def jq_version(self):
         """See `LocalTools.jq_version`."""
         return (_run(["jq", "--version"]) or "").strip() or None
+
+    def terraform_fmt(self, text):
+        """See `LocalTools.terraform_fmt`."""
+        # `terraform fmt -` reads stdin and needs no configuration directory.
+        return _run(["terraform", "fmt", "-"], stdin=text)

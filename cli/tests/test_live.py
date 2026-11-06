@@ -220,3 +220,76 @@ def test_find_folders_ignores_deleted_folders(monkeypatch):
         'displayName="StellarEngine-abc" AND '
         "parent=organizations/123456789012 AND state=ACTIVE"
     ]
+
+
+class _Account:
+    def __init__(self, name, is_open):
+        self.name = name
+        self.open_ = is_open
+
+
+def test_list_billing_accounts(monkeypatch):
+    class Billing:
+        def list_billing_accounts(self):
+            return [
+                _Account("billingAccounts/000000-AAAAAA-BBBBBB", True),
+                _Account("billingAccounts/111111-AAAAAA-BBBBBB", False),
+            ]
+
+    cloud = live.LiveCloudApi()
+    monkeypatch.setitem(cloud.__dict__, "_billing", Billing())
+    assert cloud.list_billing_accounts() == [
+        api.BillingAccount("000000-AAAAAA-BBBBBB", True),
+        api.BillingAccount("111111-AAAAAA-BBBBBB", False),
+    ]
+
+
+def test_list_billing_accounts_translates_errors(monkeypatch):
+    class Billing:
+        def list_billing_accounts(self):
+            raise api_exceptions.PermissionDenied("no billing access")
+
+    cloud = live.LiveCloudApi()
+    monkeypatch.setitem(cloud.__dict__, "_billing", Billing())
+    with pytest.raises(api.AccessDeniedError, match="no billing access"):
+        cloud.list_billing_accounts()
+
+
+class _Policy:
+    def __init__(self, name):
+        self.name = name
+
+
+def test_list_org_policies(monkeypatch):
+    parents = []
+
+    class OrgPolicy:
+        def list_policies(self, parent):
+            parents.append(parent)
+            return [
+                _Policy("organizations/123/policies/storage.publicAccess"),
+                _Policy("organizations/123/policies/custom.kmsRotation"),
+                _Policy(
+                    "organizations/123/policies/iam.allowedPolicyMemberDomains"
+                ),
+            ]
+
+    cloud = live.LiveCloudApi()
+    monkeypatch.setitem(cloud.__dict__, "_org_policy", OrgPolicy())
+    assert cloud.list_org_policies("123") == [
+        "custom.kmsRotation",
+        "iam.allowedPolicyMemberDomains",
+        "storage.publicAccess",
+    ]
+    assert parents == ["organizations/123"]
+
+
+def test_list_org_policies_translates_errors(monkeypatch):
+    class OrgPolicy:
+        def list_policies(self, parent):
+            raise _service_disabled()
+
+    cloud = live.LiveCloudApi()
+    monkeypatch.setitem(cloud.__dict__, "_org_policy", OrgPolicy())
+    with pytest.raises(api.ApiDisabledError):
+        cloud.list_org_policies("123")

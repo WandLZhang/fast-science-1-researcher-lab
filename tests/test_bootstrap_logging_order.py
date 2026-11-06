@@ -134,6 +134,7 @@ class TestBootstrapLoggingOrder(unittest.TestCase):
             for header in (
                 'module "organization-logging"',
                 'module "managed-folder"',
+                'module "root-folder-config"',
             )
         }
         for header, match in blocks.items():
@@ -141,9 +142,30 @@ class TestBootstrapLoggingOrder(unittest.TestCase):
         self.assertIn(
             "logging_settings", blocks['module "organization-logging"'].group(0)
         )
-        for header in ('module "managed-folder"',):
+        for header in (
+            'module "managed-folder"',
+            'module "root-folder-config"',
+        ):
             with self.subTest(block=header):
                 self.assertNotIn("logging_settings", blocks[header].group(0))
+
+    def test_deploy_org_resources_moved_blocks_preserve_state_addresses(self):
+        org_tf = (_BOOTSTRAP_DIR / "organization.tf").read_text(
+            encoding="utf-8"
+        )
+        audit_tf = (_BOOTSTRAP_DIR / "audit-logging.tf").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("from = module.organization-logging", org_tf)
+        self.assertIn("to   = module.organization-logging[0]", org_tf)
+        self.assertIn(
+            "from = google_organization_iam_audit_config.organization",
+            audit_tf,
+        )
+        self.assertIn(
+            "to   = google_organization_iam_audit_config.organization[0]",
+            audit_tf,
+        )
 
     def test_automation_project_protects_bootstrap_service_accounts(self):
         automation_tf = (_BOOTSTRAP_DIR / "automation.tf").read_text(

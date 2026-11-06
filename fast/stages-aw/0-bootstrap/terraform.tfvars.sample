@@ -121,6 +121,7 @@ org_policies_config = {
     # accounts can get IAM roles here. Find one with `gcloud organizations list`
     # in the partner's organization.
     allowed_policy_member_domains = [] #Update with additional customer IDs if needed
+    allowed_vpc_peering_producers = ["under:folders/832634261155"] # Google's Service Networking producer folder. Add other Google producers if needed
   }
 }
 

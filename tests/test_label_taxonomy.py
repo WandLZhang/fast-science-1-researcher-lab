@@ -100,6 +100,13 @@ class TestLabelTaxonomy(unittest.TestCase):
         config = json.loads(config_path.read_text(encoding="utf-8"))
         self.assertEqual(config.get("label"), "Release - Pending")
         self.assertEqual(config.get("release-label"), "Release - Tagged")
+        self.assertEqual(
+            config.get("pull-request-footer"),
+            "---\nBeep Boop. This PR was generated with "
+            "[Release Please](https://github.com/googleapis/release-please). "
+            "See [documentation]"
+            "(https://github.com/googleapis/release-please#release-please).",
+        )
 
     def test_release_docs_and_workflow_omit_warning_symbol(self):
         for rel_path in ("RELEASES.md", "CHANGELOG.md"):
@@ -114,6 +121,18 @@ class TestLabelTaxonomy(unittest.TestCase):
             "note.title = 'Breaking Changes'/g",
             workflow,
         )
+        self.assertIn(
+            "s/const NOTES_DELIMITER = '---'/"
+            "const NOTES_DELIMITER = '<!-- release-please-notes -->'/g",
+            workflow,
+        )
+        self.assertIn(
+            "s/await this.github.commentOnIssue(comment, pullRequest.number);/"
+            "void 0;/g",
+            workflow,
+        )
+        self.assertIn("/tmp/release_sub_bullets.json", workflow)
+        self.assertIn("Ensure Curated Release PR Labels", workflow)
 
     def test_dependabot_uses_only_curated_labels(self):
         dependabot_path = _REPO_ROOT / ".github/dependabot.yml"
