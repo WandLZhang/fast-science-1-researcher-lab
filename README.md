@@ -70,11 +70,10 @@ Fill in your values before starting. Every answer maps directly to a `terraform.
 | 13 | **Group: Network Admins** (e.g. `gcp-vpc-network-admins`) | `________` | 0 | `groups.gcp-vpc-network-admins` |
 | 14 | **Group: Org Admins** (e.g. `gcp-organization-admins`) | `________` | 0 | `groups.gcp-organization-admins` |
 | 15 | **Group: Security Admins** (e.g. `gcp-security-admins`) | `________` | 0 | `groups.gcp-security-admins` |
-| 16 | *(deprecated)* — environment folders removed; each department has its own Dev/Prod subfolders (L1). | — | — | — |
-| 17 | **Networking topology** — `NCC` (recommended) or `NVA` (only if you require L7 inspection / IPS for N-S or E-W traffic) | `NCC` | 2 | Stage 2 dataset choice |
-| 18 | **On-prem connectivity?** (N, or VPN/Interconnect) | `N` | 2 | VPN/VLAN config in dataset |
-| 19 | **Managed folder name** (optional override; default `it-services` for unspecified regime, regime short code for compliance) | `________` | 0 | `managed_folder_name` |
-| 20 | **Department tag key name** (optional override; default `department` — used by L1 to scope per-department org-policy delegation via IAM conditions) | `________` | 0 | `department_tag_key_name` |
+| 16 | **Networking topology** — `NCC` (recommended) or `NVA` (only if you require L7 inspection / IPS for N-S or E-W traffic) | `NCC` | 2 | Stage 2 dataset choice |
+| 17 | **On-prem connectivity?** (N, or VPN/Interconnect) | `N` | 2 | VPN/VLAN config in dataset |
+| 18 | **Managed folder name** (optional override; default `it-services` for unspecified regime, regime short code for compliance) | `________` | 0 | `managed_folder_name` |
+| 19 | **Department tag key name** (optional override; default `department` — used by L1 to scope per-department org-policy delegation via IAM conditions) | `________` | 0 | `department_tag_key_name` |
 
 ---
 
@@ -442,7 +441,7 @@ terraform apply
 
 ## Stage 2: Networking
 
-**Choose your topology** (from questionnaire Q17):
+**Choose your topology** (from questionnaire Q16):
 
 ### Option A: NCC Hub-and-Spoke (Default — Recommended)
 
