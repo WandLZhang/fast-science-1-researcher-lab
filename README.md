@@ -697,8 +697,8 @@ Upstream is [google/stellar-engine](https://github.com/google/stellar-engine), p
 
 - **Issues:** [File upstream](https://github.com/google/stellar-engine/issues) for framework bugs, here for the research layers.
 - **Code:** Upstream takes pull requests. You need a signed [Google CLA](https://cla.developers.google.com/).
-- **Releases:** Minor versions tag on the last Friday of each month. Sync to a tag, not `main`. This fork tracks v5.1.1.
-- **Upgrading from v4.2.0:** Run `terraform init` in each stage before the first plan. Upstream renamed resources and module calls, and its `moved` blocks carry the state. In `2-networking-b-il5-ngfw`, the plan deletes the local `id_rsa` and `id_rsa.pub` files. The same key now lives in Secret Manager, and the `ngfw_ssh_private_key_secret_id` output names the secret.
+- **Releases:** Minor versions tag on the last Friday of each month. Sync to a tag, not `main`. This fork tracks v5.2.0.
+- **Upgrading to v5.2.0:** Run `terraform init` in `0-bootstrap` and `1-resman` before the first plan, because each stage has a new module call. The Stage 0 plan adds an organization-level `roles/resourcemanager.folderAdmin` grant for the bootstrap service account. Under IL4 or IL5 it also deletes the `compute.requireOsLogin` organization policy, which upstream now sets only for the other regimes. If you added producer folders to `compute.restrictVpcPeering` by editing `networking_policy.yaml`, move them to `org_policies_config.constraints.allowed_vpc_peering_producers`. Without a compliance regime, Stage 0 applies the research organization policy profile; see the [0-bootstrap README](fast/stages-aw/0-bootstrap/README.md#organization-policy-profiles).
 
 </details>
 
