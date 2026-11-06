@@ -27,6 +27,8 @@ router_config:
   name: $routers:hub/hybrid-connectivity-router
 ncc_spoke_config:
   hub: $ncc_hubs:hub
+  # site-to-site data transfer is on, which requires the center group
+  group: $ncc_groups:hub/center
 tunnels:
   remote-0:
     bgp_peer:

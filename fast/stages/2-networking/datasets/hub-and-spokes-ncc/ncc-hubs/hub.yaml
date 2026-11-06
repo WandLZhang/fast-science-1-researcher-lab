@@ -6,9 +6,22 @@
 
 name: hub
 project_id: $project_ids:net-core-0
+# Star topology: spokes in the center group reach every spoke, and spokes in
+# the edge group reach only the center. A hub's topology can't change after
+# it's created, so an existing mesh hub has to be replaced.
+preset_topology: STAR
 groups:
-  default:
+  # Central IT: the hub VPC (shared services and hybrid routing) and the
+  # hybrid spokes, which must be in center because they transfer data site
+  # to site.
+  center:
     auto_accept:
       - $project_ids:net-core-0
+  # Environments and departments. Edge spokes can't reach each other.
+  edge:
+    auto_accept:
       - $project_ids:net-prod-0
       - $project_ids:net-dev-0
+      # A department's own network project, after central IT accepts it. Its
+      # subnets can't overlap any other spoke in the hub.
+      # - dept-eng-net-0

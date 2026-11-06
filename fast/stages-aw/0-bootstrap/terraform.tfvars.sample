@@ -82,21 +82,29 @@ log_sinks = {
 
 org_policies_config = {
   import_defaults = false # No policies to import as of 27 SEP 2024
+  # profile picks the org policy set. research is the 18-constraint baseline in
+  # data/org-policies-research. regulated is the FedRAMP and IL set in
+  # data/org-policies and data/custom-org-policies. Unset, it's research without
+  # a compliance regime and regulated with one.
+  # profile = "research"
   # Brownfield orgs: list the org policies your organization already has (for
   # example from Google Cloud Setup or Foundation Builder). The second apply
   # imports them instead of failing with ALREADY_EXISTS, then sets them to this
   # stage's values. List them with:
   #   gcloud org-policies list --organization=<organization_id> --format='value(name.basename())'
   # Constraints this stage doesn't manage are skipped with a warning. The example
-  # is the Foundation Builder baseline from github.com/google/skills, minus
-  # compute.restrictXpnProjectLienRemoval, which this stage doesn't set.
+  # is the research profile: the Foundation Builder baseline from
+  # github.com/google/skills plus compute.skipDefaultNetworkCreation. The
+  # regulated profile doesn't set compute.restrictXpnProjectLienRemoval.
   # import_existing = [
   #   "compute.disableNestedVirtualization",
   #   "compute.disableSerialPortAccess",
   #   "compute.disableVpcExternalIpv6",
   #   "compute.requireOsLogin",
   #   "compute.restrictProtocolForwardingCreationForTypes",
+  #   "compute.restrictXpnProjectLienRemoval",
   #   "compute.setNewProjectDefaultToZonalDNSOnly",
+  #   "compute.skipDefaultNetworkCreation",
   #   "compute.vmExternalIpAccess",
   #   "essentialcontacts.allowedContactDomains",
   #   "iam.allowedPolicyMemberDomains",
@@ -109,6 +117,9 @@ org_policies_config = {
   #   "storage.uniformBucketLevelAccess",
   # ]
   constraints = {
+    # Customer IDs of partner organizations, such as another university, whose
+    # accounts can get IAM roles here. Find one with `gcloud organizations list`
+    # in the partner's organization.
     allowed_policy_member_domains = [] #Update with additional customer IDs if needed
   }
 }

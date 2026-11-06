@@ -127,9 +127,34 @@ locals {
       }))
     ]
   )...)
+  # research profile: the baseline in data/org-policies-research, which
+  # replaces the regulated set of data/org-policies and data/custom-org-policies
+  org_policy_profile = coalesce(
+    var.org_policies_config.profile,
+    var.assured_workloads.regime == "COMPLIANCE_REGIME_UNSPECIFIED" ? "research" : "regulated"
+  )
+  _org_policies_research_raw = merge([
+    for f in try(fileset("./data/org-policies-research/", "*_policy.yaml"), []) :
+    yamldecode(templatefile("./data/org-policies-research/${f}", {
+      allowed_domains : var.org_policies_config.constraints.allowed_policy_member_domains
+      customer_id : var.organization.customer_id
+      domain_name : var.organization.domain
+    }))
+  ]...)
+  # the two sets have different shapes, so filter them instead of a conditional
+  _org_policies_profile_raw = merge(
+    {
+      for pk, pv in local._org_policies_raw :
+      pk => pv if local.org_policy_profile != "research"
+    },
+    {
+      for pk, pv in local._org_policies_research_raw :
+      pk => pv if local.org_policy_profile == "research"
+    }
+  )
   # formalize the policies
   org_policies = {
-    for k, v in local._org_policies_raw :
+    for k, v in local._org_policies_profile_raw :
     k => {
       inherit_from_parent = try(v.inherit_from_parent, null)
       reset               = try(v.reset, null)
@@ -406,8 +431,12 @@ module "organization" {
   custom_roles = var.custom_roles
   factories_config = {
     custom_roles = var.factories_config.custom_roles
+    # the module merges this folder under local.org_policies, so the research
+    # profile turns it off
     org_policies = (
-      var.bootstrap_user != null ? null : var.factories_config.org_policy
+      var.bootstrap_user != null || local.org_policy_profile == "research"
+      ? null
+      : var.factories_config.org_policy
     )
     org_policy_custom_constraints = "./data/custom-constraint-policies/"
     context = {

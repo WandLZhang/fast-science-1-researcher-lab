@@ -1,0 +1,74 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+# Research profile (org_policies_config.profile = "research"), the default
+# for organizations without a compliance regime. The files in this folder hold
+# the 17 baseline constraints of the Foundation Builder recipe, with the
+# recipe's values, plus compute.skipDefaultNetworkCreation:
+#   https://github.com/google/skills/blob/main/skills/cloud/google-cloud-recipe-foundation-builder/references/org-policies.md
+# An organization that already applied the recipe keeps its values. List its
+# policies in org_policies_config.import_existing to adopt them.
+
+# Disables hardware-assisted nested virtualization on Compute Engine VMs.
+compute.disableNestedVirtualization:
+  rules:
+    - enforce: true
+
+# Disables serial port access to Compute Engine VMs.
+compute.disableSerialPortAccess:
+  rules:
+    - enforce: true
+
+# Blocks subnets with external IPv6 ranges.
+compute.disableVpcExternalIpv6:
+  rules:
+    - enforce: true
+
+# Enables OS Login on new projects and keeps VM metadata from disabling it.
+compute.requireOsLogin:
+  rules:
+    - enforce: true
+
+# Allows only internal protocol forwarding rules.
+compute.restrictProtocolForwardingCreationForTypes:
+  rules:
+    - allow:
+        values:
+          - INTERNAL
+
+# Only users with organization-level permission can remove the lien that
+# protects a Shared VPC host project from deletion.
+compute.restrictXpnProjectLienRemoval:
+  rules:
+    - enforce: true
+
+# New projects use zonal internal DNS names.
+compute.setNewProjectDefaultToZonalDNSOnly:
+  rules:
+    - enforce: true
+
+# Not in the recipe. New projects get no default network, whose preset
+# firewall rules allow SSH, RDP and ICMP from 0.0.0.0/0:
+#   https://docs.cloud.google.com/firewall/docs/firewalls
+compute.skipDefaultNetworkCreation:
+  rules:
+    - enforce: true
+
+# VMs can't have external IP addresses. A department that needs them can
+# relax this on its folder (the sandbox preset in 1-resman does).
+compute.vmExternalIpAccess:
+  rules:
+    - deny:
+        all: true

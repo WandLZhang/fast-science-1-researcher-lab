@@ -1,6 +1,6 @@
 # NCC Hub and spoke
 
-This stage sets up the shared network infrastructure environment, and leverages [NCC](https://cloud.google.com/network-connectivity/docs/network-connectivity-center) to implement a VPC full mesh between different spokes, including hybrid spokes (e.g. VPN tunnels or VLAN attachments).
+This stage sets up the shared network infrastructure environment with an [NCC](https://cloud.google.com/network-connectivity/docs/network-connectivity-center) hub that uses the star topology. The center group holds the hub VPC and the hybrid spokes (VPN tunnels or VLAN attachments). The edge group holds the environment and department VPCs, which reach the center but not each other.
 
 - the NCC hub acts as a control-plane and single pane of glass for connectivity
 - the spoke VPCs allow partitioning workloads (e.g. by environments), while still retaining controlled access to central connectivity and services
@@ -31,8 +31,8 @@ Routes in GCP are either automatically created for VPC subnets, manually created
 Furthermore:
 
 - routes between multiple subnets within the same VPC are automatically programmed by GCP
-- each spoke exchanges routes with the NCC hub, and gets NCC routes belonging to other spoks from the hub
-- on-premises is connected to the hub VPC and dynamically exchanges BGP routes with GCP using HA VPN. The HA VPN tunnels are configured as Hybrid spokes on the NCC hub, and as such all spokes receive those dynamic routes.
+- center spokes get routes from every spoke, and edge spokes get routes from center spokes only
+- on-premises connects to the hub VPC over HA VPN and exchanges routes with BGP. The tunnels are hybrid spokes in the center group, so every spoke receives the on-premises routes.
 
 ## NCC Configuration
 
@@ -43,10 +43,14 @@ The **NCC hub setup**, controlled by files in the [ncc-hubs](./ncc-hubs/) folder
 [prod-hub](./ncc-hubs/hub.yaml)
 
 ```yaml
-name: the-hub
+name: hub
 project_id: $project_ids:net-core-0
+preset_topology: STAR
 groups:
-  default:
+  center:
+    auto_accept:
+      - $project_ids:net-core-0
+  edge:
     auto_accept:
       - $project_ids:net-prod-0
       - $project_ids:net-dev-0
@@ -59,12 +63,23 @@ The **NCC spokes attachment**, controlled by each VPC `.config` file
 ```yaml
 # [...]
 ncc_config:
-  hub: $ncc_hubs:the-hub
-  group: $ncc_groups:the-hub/default
+  hub: $ncc_hubs:hub
+  group: $ncc_groups:hub/edge
 # [...]
 ```
 
 For more information about cross referencing resources, please check the [main README.md file](../../README.md)
+
+## Department spokes
+
+A department attaches its own VPC to the edge group from its own project. It reaches the hub VPC and on-premises, and no other department.
+
+1. Central IT gives the department a CIDR block that doesn't overlap any other spoke.
+2. Central IT grants the department's admins `roles/networkconnectivity.groupUser` on the `edge` group and `roles/networkconnectivity.hubViewer` on the hub.
+3. Central IT adds the department's network project to `groups.edge.auto_accept` in `ncc-hubs/hub.yaml` and applies this stage.
+4. The department creates its VPC and a spoke in the `edge` group.
+
+A hub's topology can't change after it's created, so a deployment with a mesh hub has to recreate it or keep `preset_topology: MESH`.
 
 ## Internet egress
 

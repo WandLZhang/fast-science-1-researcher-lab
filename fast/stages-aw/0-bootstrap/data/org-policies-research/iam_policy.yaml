@@ -1,0 +1,47 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+# Research profile, see compute_policy.yaml.
+
+# Only principals from these Cloud Identity or Google Workspace customer IDs
+# can be granted IAM roles: this organization's, plus the partner
+# organizations in org_policies_config.constraints.allowed_policy_member_domains.
+# A department with the tag-scoped orgpolicy.policyAdmin grant from 1-resman
+# can add a partner on its own folder with a policy that inherits from the
+# parent and allows the partner's customer ID.
+iam.allowedPolicyMemberDomains:
+  rules:
+    - allow:
+        values:
+          - ${customer_id}
+%{ for domain in allowed_domains ~}
+          - ${domain}
+%{ endfor ~}
+
+# Default App Engine and Compute Engine service accounts get no automatic
+# Editor grant.
+iam.automaticIamGrantsForDefaultServiceAccounts:
+  rules:
+    - enforce: true
+
+# No service account keys can be created.
+iam.disableServiceAccountKeyCreation:
+  rules:
+    - enforce: true
+
+# No public keys can be uploaded to service accounts.
+iam.disableServiceAccountKeyUpload:
+  rules:
+    - enforce: true

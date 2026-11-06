@@ -13,7 +13,7 @@ nat_config:
     region: $locations:primary
 ncc_config:
   hub: $ncc_hubs:hub
-  group: $ncc_groups:hub/default
+  group: $ncc_groups:hub/edge
 routes:
   default:
     dest_range: 0.0.0.0/0
