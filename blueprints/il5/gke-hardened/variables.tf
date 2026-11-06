@@ -155,7 +155,7 @@ variable "node_disk_size_gb" {
 }
 
 variable "node_machine_type" {
-  description = "The Node Machine type to be used in the NodePool."
+  description = "The node machine type, which must support Confidential GKE Nodes, such as the N2D, C2D or C3D series."
   type        = string
   default     = "n2d-standard-2"
 }
@@ -180,12 +180,11 @@ variable "region" {
   type        = string
 }
 
-# tflint-ignore: terraform_unused_declarations
-
 variable "remove_default_node_pool" {
-  description = "The Default NodePool remove it or not."
+  description = "Remove the default node pool, which runs without the hardened node settings of the cluster node pool."
   type        = bool
-  # default     = false
+  default     = true
+  nullable    = false
 }
 
 variable "snapshot_max_retention_days" {

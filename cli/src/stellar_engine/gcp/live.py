@@ -296,6 +296,16 @@ class LiveCloudApi:
         return api.BillingAccount(account_id, account.open_)
 
     @_translated
+    def list_billing_accounts(self):
+        """See `CloudApi.list_billing_accounts`."""
+        return [
+            api.BillingAccount(
+                account.name.removeprefix("billingAccounts/"), account.open_
+            )
+            for account in self._billing.list_billing_accounts()
+        ]
+
+    @_translated
     def granted_billing_permissions(self, account_id, permissions):
         """See `CloudApi.granted_billing_permissions`."""
         client = self._billing
@@ -398,6 +408,13 @@ class LiveCloudApi:
         except api_exceptions.NotFound:
             return False
         return True
+
+    @_translated
+    def list_org_policies(self, org_id):
+        """See `CloudApi.list_org_policies`."""
+        pager = self._org_policy.list_policies(parent=f"organizations/{org_id}")
+        # Policy names read `organizations/<id>/policies/<constraint>`.
+        return sorted(policy.name.rpartition("/")[2] for policy in pager)
 
     @_translated
     def log_sink_exists(self, org_id, name):

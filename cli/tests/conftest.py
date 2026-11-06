@@ -16,6 +16,8 @@
 
 import dataclasses
 import pathlib
+import shutil
+import stat
 
 import pytest
 
@@ -31,6 +33,28 @@ CUSTOMER_ID = "C01234567"
 BILLING = "000000-AAAAAA-BBBBBB"
 PROJECT = "example-bootstrap"
 USER = "deployer@example.com"
+# Addresses of the Stage 0 project resources that import blocks adopt.
+AUTOMATION_ADDRESS = "module.automation-project.google_project.project[0]"
+LOG_EXPORT_ADDRESS = "module.log-export-project.google_project.project[0]"
+BILLING_EXPORT_ADDRESS = (
+    "module.billing-export-project[0].google_project.project[0]"
+)
+
+
+def mode(path):
+    """Returns the permission bits of a file or directory."""
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skips the tests marked `terraform` when the binary is missing."""
+    del config  # Unused.
+    if shutil.which("terraform") is not None:
+        return
+    skip = pytest.mark.skip(reason="terraform is not installed")
+    for item in items:
+        if item.get_closest_marker("terraform") is not None:
+            item.add_marker(skip)
 
 
 @dataclasses.dataclass
@@ -58,6 +82,9 @@ class FakeTools:
     def jq_version(self):
         return self.jq
 
+    def terraform_fmt(self, text):
+        return None
+
 
 @dataclasses.dataclass
 class FakeCloud:
@@ -83,6 +110,9 @@ class FakeCloud:
     billing_account: object = dataclasses.field(
         default_factory=lambda: api.BillingAccount(BILLING, True)
     )
+    billing_accounts: object = dataclasses.field(
+        default_factory=lambda: [api.BillingAccount(BILLING, True)]
+    )
     project_link: object = dataclasses.field(
         default_factory=lambda: api.ProjectBilling(BILLING, True)
     )
@@ -95,6 +125,7 @@ class FakeCloud:
     custom_roles: set = dataclasses.field(default_factory=set)
     constraints: set = dataclasses.field(default_factory=set)
     sinks: set = dataclasses.field(default_factory=set)
+    org_policies: object = dataclasses.field(default_factory=list)
     groups: object = None
     calls: list = dataclasses.field(default_factory=list)
 
@@ -144,6 +175,9 @@ class FakeCloud:
     def get_billing_account(self, account_id):
         return self._value(self.billing_account)
 
+    def list_billing_accounts(self):
+        return self._value(self.billing_accounts)
+
     def project_billing(self, project_id):
         return self._value(self.project_link)
 
@@ -173,6 +207,10 @@ class FakeCloud:
 
     def log_sink_exists(self, org_id, name):
         return name in self.sinks
+
+    def list_org_policies(self, org_id):
+        self.calls.append(("org_policies", org_id))
+        return sorted(self._value(self.org_policies))
 
     def group_exists(self, email):
         if self.groups is None:
@@ -214,7 +252,13 @@ def make_ctx(repo, cloud, local_tools):
             "customer_id": CUSTOMER_ID,
         }
         values.update(overrides)
-        values = {key: value for key, value in values.items() if value}
+        # An empty tuple stays, so a test can model answers.yaml with an
+        # empty list.
+        values = {
+            key: value
+            for key, value in values.items()
+            if value or value is False or value == ()
+        }
         return checks.Context(
             inputs=inputs_lib.PreflightInputs.model_validate(values),
             cloud=cloud,

@@ -172,6 +172,10 @@ class CloudApi(Protocol):
         """Returns a billing account by ID."""
         ...
 
+    def list_billing_accounts(self) -> list[BillingAccount]:
+        """Returns the billing accounts visible to the caller."""
+        ...
+
     def granted_billing_permissions(
         self, account_id: str, permissions: list[str]
     ) -> set[str]:
@@ -213,6 +217,15 @@ class CloudApi(Protocol):
 
     def custom_constraint_exists(self, org_id: str, name: str) -> bool:
         """Returns whether an organization custom constraint exists."""
+        ...
+
+    def list_org_policies(self, org_id: str) -> list[str]:
+        """Returns the constraints of the policies set on an organization.
+
+        Returns:
+            Constraint names without the resource path, such as
+            `iam.allowedPolicyMemberDomains`, sorted.
+        """
         ...
 
     def log_sink_exists(self, org_id: str, name: str) -> bool:

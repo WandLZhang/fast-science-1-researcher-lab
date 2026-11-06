@@ -130,6 +130,21 @@ variable "department_tag_key_name" {
   default     = "department"
 }
 
+variable "deploy_org_resources" {
+  description = "Selective control for deploying organization-level resources."
+  type = object({
+    audit_config            = optional(bool, true)
+    custom_roles            = optional(bool, true)
+    iam                     = optional(bool, true)
+    logging_settings        = optional(bool, true)
+    logging_sinks           = optional(bool, true)
+    org_policies            = optional(bool, true)
+    workforce_identity_pool = optional(bool, true)
+  })
+  nullable = false
+  default  = {}
+}
+
 variable "essential_contacts" {
   description = "Email or map of emails to notification category lists used for essential contacts, unset if null or empty."
   type        = any
@@ -320,6 +335,7 @@ variable "org_policies_config" {
   type = object({
     constraints = optional(object({
       allowed_policy_member_domains = optional(list(string), [])
+      allowed_vpc_peering_producers = optional(list(string), ["under:folders/832634261155"])
     }), {})
     import_defaults = optional(bool, false)
     import_existing = optional(list(string), [])

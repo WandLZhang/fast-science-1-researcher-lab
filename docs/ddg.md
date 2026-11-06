@@ -4,8 +4,8 @@ Cloud Foundation Fabric Detailed Deployment Guide
 
 | <strong>Created:</strong>             | June 04, 2023 |
 | :------------------------------------ | :------------ |
-| <strong>Updated:</strong>             | September 28, 2026 |
-| <strong>Version:</strong>             | v4.1.0        |
+| <strong>Updated:</strong>             | October 31, 2026 |
+| <strong>Version:</strong>             | v5.2.0        |
 | <strong>Most recent changes:</strong> | [CHANGELOG.md](../CHANGELOG.md) |
 
 ##
@@ -145,9 +145,12 @@ permissions.**
 - Navigate to the [Super Admin](https://admin.google.com/ac/roles) roles
   section in Google Workspace to ensure that the deploying user is a Super
   Admin
-- Follow the [Initial Groups and Administrative Access in Cloud Setup Steps 2
-  and 3](https://console.cloud.google.com/cloud-setup/overview) instructions
-  adding the required administrative groups bound by the FAST stages (`0-bootstrap/variables.tf` through `3-security`):
+- Add the groups below, as described in Cloud Setup's [Users and
+  groups](https://docs.cloud.google.com/docs/enterprise/advanced-production#checklist-section-2)
+  task. The FAST stages bind these names (`0-bootstrap/variables.tf` through
+  `3-security`). Cloud Setup recommends `gcp-network-admins` for the network
+  group, so rename it to `gcp-vpc-network-admins` or override it in the
+  `groups` variable of `0-bootstrap`.
   - If prompted, skip the IDP step for now
 - Note: You do not have to complete subsequent steps but make sure you finish
   Step 2. Google may change their default group names. You can manually create
