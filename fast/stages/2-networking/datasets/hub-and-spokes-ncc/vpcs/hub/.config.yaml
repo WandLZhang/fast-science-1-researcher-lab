@@ -7,6 +7,11 @@
 project_id: $project_ids:net-core-0
 name: hub-0
 delete_default_routes_on_create: true
+# The hub VPC is the center spoke. Edge spokes reach its subnets and the
+# on-premises routes of the hybrid spokes.
+ncc_config:
+  hub: $ncc_hubs:hub
+  group: $ncc_groups:hub/center
 routers:
   hybrid-connectivity-router:
     region: $locations:primary
