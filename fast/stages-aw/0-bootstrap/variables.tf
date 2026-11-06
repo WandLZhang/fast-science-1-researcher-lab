@@ -316,13 +316,14 @@ variable "managed_folder_name" {
 }
 
 variable "org_policies_config" {
-  description = "Organization policies customization. import_existing lists org policies that already exist on the organization (for example from Google Cloud Setup or Foundation Builder), so the stage imports them instead of failing with ALREADY_EXISTS."
+  description = "Organization policies customization. profile picks the policy set: research (data/org-policies-research) or regulated (data/org-policies and data/custom-org-policies). It defaults to research without a compliance regime and to regulated with one. import_existing lists org policies that already exist on the organization (for example from Google Cloud Setup or Foundation Builder), so the stage imports them instead of failing with ALREADY_EXISTS."
   type = object({
     constraints = optional(object({
       allowed_policy_member_domains = optional(list(string), [])
     }), {})
     import_defaults = optional(bool, false)
     import_existing = optional(list(string), [])
+    profile         = optional(string)
     tag_name        = optional(string, "org-policies")
     tag_values = optional(map(object({
       description = optional(string, "Managed by the Terraform organization module.")
@@ -331,6 +332,12 @@ variable "org_policies_config" {
     })), {})
   })
   default = {}
+  validation {
+    condition = contains(
+      ["research", "regulated"], coalesce(var.org_policies_config.profile, "research")
+    )
+    error_message = "org_policies_config.profile must be research, regulated or null."
+  }
 }
 
 variable "organization" {
