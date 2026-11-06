@@ -8,6 +8,7 @@ The purpose of this stage is to enable critical Google Cloud Organization level 
   - [User Groups](#user-groups)
   - [Google Cloud Organization Level IAM](#google-cloud-organization-level-iam)
   - [Google Cloud Organization Policies and Tag-Based Conditions](#google-cloud-organization-policies-and-tag-based-conditions)
+  - [Organization policy profiles](#organization-policy-profiles)
   - [Automation Google Cloud Project and Resources](#automation-google-cloud-project-and-resources)
   - [Billing Account](#billing-account)
     - [Billing Budgets](#billing-budgets)
