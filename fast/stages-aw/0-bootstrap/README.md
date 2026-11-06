@@ -98,6 +98,17 @@ compute.requireOsLogin:
       expression: resource.matchTag('12345678/org-policies-config', 'compute-require-oslogin-false')
 ```
 
+### Organization policy profiles
+
+`org_policies_config.profile` picks the organization policies this stage sets.
+
+- `research`, the default without a compliance regime, applies 18 constraints from [data/org-policies-research](./data/org-policies-research/). These are the 17 from the [Foundation Builder recipe](https://github.com/google/skills/blob/main/skills/cloud/google-cloud-recipe-foundation-builder/references/org-policies.md), with its values, plus `compute.skipDefaultNetworkCreation`.
+- `regulated`, the default with a regime, applies the FedRAMP and IL set in `data/org-policies` and `data/custom-org-policies`.
+
+Upgrading: a deployment without a regime moves to `research` on its next apply, and the plan deletes the policies that `research` doesn't set. Set `profile = "regulated"` to keep them.
+
+Partner universities: add the partner's customer ID to `org_policies_config.constraints.allowed_policy_member_domains`, or the department admin sets `iam.allowedPolicyMemberDomains` on the department folder with `inherit_from_parent = true`.
+
 ### Automation Google Cloud Project and Resources
 
 One other design choice worth mentioning here is using a single automation Google Cloud Project for all foundational stages. We trade off some complexity on the API side (single source for usage quota, multiple service activation) for increased flexibility and simpler operations, while still effectively providing the same degree of separation via resource-level IAM.
